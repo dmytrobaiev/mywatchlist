@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mywatchlist/constants/constants.dart' show AccountType;
 import 'package:mywatchlist/generated/l10n.dart';
+import 'package:mywatchlist/services/api/MAL/web/mal_conversations.dart';
 import 'package:mywatchlist/services/api/MAL/web/mal_messages_api.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
 import 'package:mywatchlist/user/user_manager.dart';
@@ -448,8 +449,8 @@ class MalHubPoller with WidgetsBindingObserver {
     return notifications.length;
   }
 
-  /// Reads the friends' feeds and notifies the titles they completed or dropped since the
-  /// last check. The first check only remembers what is there. Returns how many were notified.
+  /// Reads the friends' feeds and notifies the titles they started, completed or dropped
+  /// since the last check. The first check only remembers what is there. Returns how many were notified.
   Future<int> pollFriends() async {
     if (!pushFriends.value || !_mayNotify) return 0;
     final rows = await hub.loadActivity(force: true, quiet: true);
@@ -463,7 +464,7 @@ class MalHubPoller with WidgetsBindingObserver {
     final now = _clock();
     final fresh = [
       for (final r in rows)
-        if ((r.isCompleted || r.isDropped) &&
+        if (r.isNews &&
             !seen.contains(r.key) &&
             r.date != null &&
             now.difference(r.date!) <= friendsWindow)
@@ -475,7 +476,11 @@ class MalHubPoller with WidgetsBindingObserver {
       for (final r in fresh.take(maxPerRun))
         HubSystemNotification(
           id: friendNotificationId(r.key),
-          title: r.isDropped ? s.Mn_Friend_Dropped(r.friend, r.title) : s.Mn_Friend_Completed(r.friend, r.title),
+          title: r.isDropped
+              ? s.Mn_Friend_Dropped(r.friend, r.title)
+              : r.isCompleted
+                  ? s.Mn_Friend_Completed(r.friend, r.title)
+                  : s.Pc_Friend_Started(r.friend, r.title),
           body: friendProgressLabel(r, s) ?? '',
           payload: MalHubPayload.friend(r),
         ),
@@ -586,6 +591,13 @@ class MalMessagesWatcher {
     try {
       if (!_canRead()) return 0;
       final page = await api.inbox(); // also refreshes MalMessagesApi.unread
+      // The conversations too, so the messages screen opens on them (one page of each box,
+      // added to what the list kept). Reading a box does not mark anything read.
+      try {
+        await MalConversationsSource(api: api).load(pages: 1, merge: true, firstInbox: page);
+      } catch (e) {
+        debugPrint('MAL conversations in the background: $e');
+      }
       final prefs = await _storage();
       // The background job writes the same list from another isolate.
       try {

@@ -15,6 +15,7 @@ import 'package:mywatchlist/services/api/Anilist/anilist_notifications_service.d
 import 'package:mywatchlist/services/api/Kitsu/kitsu_library.dart';
 import 'package:mywatchlist/services/api/MAL/mal_api.dart';
 import 'package:mywatchlist/services/api/SimKl/simkl_list_service.dart';
+import 'package:mywatchlist/user/list_cache/list_status_cache.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
 import 'package:mywatchlist/user/user_manager.dart';
 import 'package:mywatchlist/widgets/Anilist/notifications/anilist_notification_tile.dart'
@@ -38,6 +39,9 @@ typedef CandidateLoader = Future<List<AiringCandidate>> Function();
 typedef CoverFetcher = Future<String?> Function(String url, int malId);
 
 /// Airing times, loaded on demand.
+/// Deletes the stored covers of every anime not in [keep] (MAL ids).
+typedef CoverPruner = Future<void> Function(Set<int> keep);
+
 typedef EpisodeSource = Future<List<AiringEpisode>> Function();
 
 /// What the last scheduling run did, for the settings page.
@@ -103,11 +107,15 @@ class NotificationService {
     CandidateLoader? loadCandidates,
     EpisodeSource? loadEpisodes,
     CoverFetcher? fetchCover,
+    CoverPruner? pruneCovers,
     NotificationTexts? texts,
     NotificationPreferences Function()? readPrefs,
     DateTime Function()? clock,
     Listenable? trackerChanges,
     AccountType Function()? readFeedTracker,
+    bool Function(AccountType tracker)? isSignedIn,
+    Listenable? listChanges,
+    Map<int, String> Function(AccountType tracker)? readListStatuses,
     this.refreshEvery = const Duration(days: 1),
     this.debounce = const Duration(seconds: 2),
     this.pollMalHub = false,
@@ -117,11 +125,15 @@ class NotificationService {
         _loadCandidates = loadCandidates ?? _loadMalCandidates,
         _loadEpisodes = loadEpisodes ?? _loadScheduleEpisodes,
         _fetchCover = fetchCover ?? _downloadCover,
+        _pruneCovers = pruneCovers ?? _deleteCoversExcept,
         _texts = texts ?? const _SNotificationTexts(),
         _readPrefs = readPrefs ?? (() => Preferences.current.notifications),
         _clock = clock ?? DateTime.now,
         _trackerChanges = trackerChanges,
         _readFeedTracker = readFeedTracker ?? _userFeedTracker,
+        _isSignedIn = isSignedIn ?? UserManager.instance.isAuthenticated,
+        _listChanges = listChanges,
+        _readListStatuses = readListStatuses ?? _cachedStatuses,
         _openHubPayload = openHubPayload ?? openMalHubPayload,
         _openAnilistPayload = openAnilistPayload ?? openAnilistInboxPayload;
 
@@ -154,11 +166,15 @@ class NotificationService {
   final CandidateLoader _loadCandidates;
   final EpisodeSource _loadEpisodes;
   final CoverFetcher _fetchCover;
+  final CoverPruner _pruneCovers;
   final NotificationTexts _texts;
   final NotificationPreferences Function() _readPrefs;
   final DateTime Function() _clock;
   final Listenable? _trackerChanges;
   final AccountType Function() _readFeedTracker;
+  final bool Function(AccountType tracker) _isSignedIn;
+  final Listenable? _listChanges;
+  final Map<int, String> Function(AccountType tracker) _readListStatuses;
 
   final ValueNotifier<NotificationSummary> summary =
       ValueNotifier(const NotificationSummary());
@@ -176,6 +192,9 @@ class NotificationService {
   StreamSubscription<AppPreferences>? _prefsSub;
   Listenable? _boundTrackers;
   AccountType? _lastFeedTracker;
+  bool? _lastFeedSignedIn;
+  Listenable? _boundList;
+  String? _listFingerprint;
 
   bool get isInitialized => _initialized;
 
@@ -188,6 +207,7 @@ class NotificationService {
     if (_initialized) return;
     _initialized = true;
     bindTracker(_trackerChanges ?? UserManager.instance);
+    bindList(_listChanges ?? ListStatusCache.instance);
     try {
       await _backend.init(_handleTap);
       final launch = await _backend.launchPayload();
@@ -280,16 +300,59 @@ class NotificationService {
     _boundTrackers?.removeListener(_onTrackerChanged);
     _boundTrackers = source;
     _lastFeedTracker = _readFeedTracker();
+    _lastFeedSignedIn = _isSignedIn(_lastFeedTracker!);
     source.addListener(_onTrackerChanged);
   }
 
   void _onTrackerChanged() {
     final feed = _readFeedTracker();
-    if (feed == _lastFeedTracker) return;
+    final signedIn = _isSignedIn(feed);
+    final wasSignedIn = _lastFeedSignedIn;
+    _lastFeedSignedIn = signedIn;
+    if (feed == _lastFeedTracker) {
+      // Signed out of the account the alarms came from: they must not fire any more.
+      if (wasSignedIn == true && !signedIn && _readPrefs().enabled) requestReschedule();
+      return;
+    }
     _lastFeedTracker = feed;
     if (!_readPrefs().enabled) return;
     unawaited(_rescheduleIfFeedDiffers(feed));
   }
+
+  /// Follows the user's list (the shared status cache, written by every list load and
+  /// edit): an anime that enters or leaves the watching / plan-to-watch lists (added,
+  /// dropped, completed, removed, another account) gets its alarms planned or cancelled at
+  /// once, not at the next daily refresh. Score and progress changes do not count.
+  void bindList(Listenable source) {
+    _boundList?.removeListener(_onListChanged);
+    _boundList = source;
+    _listFingerprint = _fingerprint();
+    source.addListener(_onListChanged);
+  }
+
+  /// The anime of the lists that can be notified (watching, plan to watch), in a stable
+  /// order; the cache stores every tracker's statuses with MAL's names.
+  String _fingerprint() {
+    final statuses = _readListStatuses(_readFeedTracker());
+    final ids = [
+      for (final e in statuses.entries)
+        if (e.value == 'watching' || e.value == 'plan_to_watch') e.key,
+    ]..sort();
+    return [for (final id in ids) '$id:${statuses[id]}'].join(',');
+  }
+
+  void _onListChanged() {
+    final next = _fingerprint();
+    final previous = _listFingerprint;
+    _listFingerprint = next;
+    // The first load of the cache is not a change: the startup refresh covers it.
+    if (previous == null || previous.isEmpty || previous == next) return;
+    if (!_readPrefs().enabled) return;
+    requestReschedule();
+  }
+
+  static Map<int, String> _cachedStatuses(AccountType tracker) =>
+      ListStatusCache.instance.statusesOf(tracker: tracker);
 
   /// The alarms in place were planned from another account than [feed]. Startup loads the
   /// saved tracker after `init`, which looks like a switch: the account of the last run
@@ -360,6 +423,7 @@ class NotificationService {
       final prefs = _readPrefs();
       if (!prefs.enabled) {
         await _backend.cancelAll();
+        unawaited(_prune(const {}));
         summary.value = const NotificationSummary();
         return;
       }
@@ -382,6 +446,10 @@ class NotificationService {
         candidates = await _loadCandidates();
         episodes = await _loadEpisodes();
       } on _NeedsMal {
+        // No account to read the lists from (signed out): the alarms planned from the old
+        // lists must not keep firing.
+        await _backend.cancelAll();
+        unawaited(_prune(const {}));
         summary.value = const NotificationSummary(needsMal: true);
         return;
       } catch (e) {
@@ -414,6 +482,7 @@ class NotificationService {
         }
       }
       await _saveLastRun(now, feed);
+      unawaited(_prune({for (final n in planned) if (n.malId != null) n.malId!}));
       summary.value = NotificationSummary(
         scheduled: count,
         next: planned.isEmpty ? null : planned.first.at,
@@ -422,6 +491,16 @@ class NotificationService {
     } catch (e) {
       debugPrint('Notifications: $e');
       summary.value = summary.value.copyWith(running: false);
+    }
+  }
+
+  /// Keeps only the covers of the planned anime: a cover is stored for each notified anime,
+  /// and one that left the lists must not stay on the phone. Never throws.
+  Future<void> _prune(Set<int> keep) async {
+    try {
+      await _pruneCovers(keep);
+    } catch (e) {
+      debugPrint('Notifications: covers not pruned ($e)');
     }
   }
 
@@ -535,6 +614,8 @@ class NotificationService {
     _prefsSub?.cancel();
     _boundTrackers?.removeListener(_onTrackerChanged);
     _boundTrackers = null;
+    _boundList?.removeListener(_onListChanged);
+    _boundList = null;
   }
 
   // ---- defaults ----
@@ -601,9 +682,30 @@ class NotificationService {
     ];
   }
 
+  static Future<Directory> _coverDir() async =>
+      Directory('${(await getApplicationSupportDirectory()).path}/notification_covers');
+
+  /// Deletes the covers of the anime not in [keep], and the folder the older versions kept
+  /// in the cache.
+  static Future<void> _deleteCoversExcept(Set<int> keep) async {
+    final dir = await _coverDir();
+    if (await dir.exists()) {
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        final id = int.tryParse(name.split('.').first);
+        if (id == null || !keep.contains(id)) await entity.delete();
+      }
+    }
+    final legacy = Directory('${(await getTemporaryDirectory()).path}/notification_covers');
+    if (await legacy.exists()) await legacy.delete(recursive: true);
+  }
+
   static Future<String?> _downloadCover(String url, int malId) async {
     try {
-      final dir = Directory('${(await getTemporaryDirectory()).path}/notification_covers');
+      // Not the cache folder: Android may empty it before the alarm fires, and the
+      // notification is then shown without its cover.
+      final dir = await _coverDir();
       await dir.create(recursive: true);
       final file = File('${dir.path}/$malId.jpg');
       if (await file.exists() && await file.length() > 0) return file.path;

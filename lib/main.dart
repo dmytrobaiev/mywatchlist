@@ -12,8 +12,10 @@ import 'package:mywatchlist/pages/login_page.dart';
 import 'package:mywatchlist/screens/explore/explore_images.dart';
 import 'package:mywatchlist/screens/open_screen.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
+import 'package:mywatchlist/services/api/MAL/web/mal_web_store.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_api.dart';
 import 'package:mywatchlist/services/api/MAL/mal_api.dart';
+import 'package:mywatchlist/services/api/jikan_source.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/mal_scrapper.dart';
 import 'package:mywatchlist/services/auth/mal_auth_v2.dart';
 import 'package:mywatchlist/services/auth/anilist_auth_v2.dart';
@@ -22,6 +24,7 @@ import 'package:mywatchlist/constants/constants.dart' show AccountType;
 import 'package:mywatchlist/services/notifications/mal_hub_poller.dart';
 import 'package:mywatchlist/services/notifications/notification_backend.dart' show PluginNotificationBackend;
 import 'package:mywatchlist/services/notifications/notification_service.dart';
+import 'package:mywatchlist/user/user_mal_v2.dart';
 import 'package:mywatchlist/user/user_manager.dart';
 import 'package:app_links/app_links.dart';
 import 'package:mywatchlist/user/MAL/mal_home_preferences_bloc.dart';
@@ -30,6 +33,7 @@ import 'package:mywatchlist/utils/app_routes.dart';
 import 'package:mywatchlist/utils/deep_links.dart';
 import 'package:mywatchlist/user/accounts/account_bloc.dart';
 import 'package:mywatchlist/user/accounts/provider/account_manager_singleton.dart';
+import 'package:mywatchlist/user/list_cache/list_status_sync.dart';
 import 'package:mywatchlist/user/language/language_bloc.dart';
 import 'package:mywatchlist/user/language/language_state.dart';
 import 'package:mywatchlist/user/language/supported_languages.dart';
@@ -71,6 +75,10 @@ void main() async {
   // Load shared preferences
   final sharedPreferences = await SharedPreferences.getInstance();
 
+  // One data source for Jikan-shaped requests (Jikan or Tenrai, never both): the saved mute
+  // or a light Jikan probe decides, without blocking the launch; requests wait for it (5 s max).
+  unawaited(JikanSource.instance.start(sharedPreferences));
+
   // DailyAL preferences (the contract read by every feature): legacy keys moved first, then
   // the bloc starts from the saved values so the first frame already uses them.
   final preferencesStore = PreferencesStore(sharedPreferences);
@@ -90,6 +98,16 @@ void main() async {
   // Initialize UserManager (POO architecture with BaseUser inheritance)
   userManager = UserManager.instance;
   await userManager.initializeAllUsers();
+
+  // What the app last read of the MAL website (notifications, friends, messages, chats), so
+  // those screens show it at once; again when the MAL account changes.
+  await MalWebStore.instance.load(UserMalV2.instance.username);
+  userManager.addListener(() => unawaited(MalWebStore.instance.load(UserMalV2.instance.username)));
+
+  // The whole MAL lists in the status cache (every 12 h, at once for another account), so
+  // every card and row can show "in my list" with its status and score.
+  unawaited(ListStatusSync.instance.syncIfDue());
+  userManager.addListener(() => unawaited(ListStatusSync.instance.syncIfDue()));
 
   // MAL notifications and messages, and AniList notifications, while the app is closed
   // (Android WorkManager, every 30 min).
@@ -351,6 +369,7 @@ void malHubCallbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     await runMalHubWorker();
     await runAnilistWorker();
+    await runAiringWorker();
     // Never "retry": the next period comes in 30 minutes anyway.
     return true;
   });
@@ -369,6 +388,7 @@ Future<void> runMalHubWorker({
     // The app process wrote the switches: read the file again, not this isolate's copy.
     await prefs.reload();
     await UserManager.instance.mal.loadFromPreferences();
+    await MalWebStore.instance.load(UserMalV2.instance.username);
     final language = LanguageBloc(prefs: prefs);
     await language.applyCurrent();
     await language.close();
@@ -378,8 +398,39 @@ Future<void> runMalHubWorker({
     MalHubPoller.instance = round;
     if (poller == null) await PluginNotificationBackend().init((_) {});
     await MalHubPoller.instance.poll(forceHub: true);
+    // What the round read is on the device for the screens before the isolate ends.
+    await MalWebStore.instance.flush();
   } catch (e) {
     debugPrint('MAL hub worker: $e');
+  }
+}
+
+/// The airing part of a background round: plans the episode alarms again from the lists as
+/// they are now (once a day, [NotificationService.refreshEvery]), so an anime that left the
+/// watching / plan-to-watch lists, or the lists of an account signed out, stops notifying
+/// even when the app is not opened. Never throws.
+Future<void> runAiringWorker({Future<SharedPreferences> Function()? storage}) async {
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    final prefs = await (storage ?? SharedPreferences.getInstance)();
+    await prefs.reload();
+    final store = PreferencesStore(prefs);
+    if (!store.read().notifications.enabled) return;
+    await dotenv.load(fileName: 'assets/.env');
+    await UserManager.instance.initializeAllUsers();
+    await UserManager.instance.loadCurrentTracker();
+    AccountManagerSingleton().updateAccountType(
+        NotificationService.candidateTracker(
+            UserManager.instance.currentTracker, UserManager.instance.isAuthenticated));
+    final language = LanguageBloc(prefs: prefs);
+    await language.applyCurrent();
+    await language.close();
+    final backend = PluginNotificationBackend();
+    await backend.init((_) {});
+    await NotificationService(backend: backend, readPrefs: () => store.read().notifications)
+        .scheduleAll();
+  } catch (e) {
+    debugPrint('Airing worker: $e');
   }
 }
 
@@ -454,8 +505,9 @@ class WorkmanagerMalHubScheduler implements MalHubScheduler {
 
 /// Keeps the background job registered exactly while it can be useful: the notification
 /// master switch is on and either a MyAnimeList account is signed in with at least one of
-/// the MAL switches (hub, friends, messages) on, or an AniList account is signed in with
-/// its switch on ([AnilistBackgroundNotifier.wanted]).
+/// the MAL switches (hub, friends, messages) on, an AniList account is signed in with its
+/// switch on ([AnilistBackgroundNotifier.wanted]), or any tracker is signed in (the airing
+/// alarms are refreshed from its lists, [runAiringWorker]).
 class MalBackgroundPolling {
   MalBackgroundPolling({MalHubScheduler? scheduler, bool Function()? wanted})
       : _scheduler = scheduler ?? WorkmanagerMalHubScheduler(),
@@ -474,7 +526,10 @@ class MalBackgroundPolling {
     final mal = Preferences.current.notifications.enabled &&
         UserManager.instance.isAuthenticated(AccountType.myanimelist) &&
         (poller.pushHub.value || poller.pushFriends.value || MalMessagesWatcher.instance.push.value);
-    return mal || AnilistBackgroundNotifier.instance.wanted;
+    // Airing alarms: refreshed in the background so they follow the lists (any tracker).
+    final airing = Preferences.current.notifications.enabled &&
+        AccountType.values.any((t) => t != AccountType.none && UserManager.instance.isAuthenticated(t));
+    return mal || airing || AnilistBackgroundNotifier.instance.wanted;
   }
 
   /// Registers the job at start and follows what decides it.

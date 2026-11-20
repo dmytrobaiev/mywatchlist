@@ -63,6 +63,8 @@ class MalNotificationAnime {
   /// The MAL id read from [url] (`/anime/<id>/…`), or null.
   int? get malId => malIdFromUrl(url, 'anime');
 
+  Map<String, Object?> toJson() => {'title': title, 'mediaType': mediaType, 'url': url};
+
   static MalNotificationAnime? fromJson(Object? json) {
     if (json is! Map) return null;
     final title = _str(json['title']);
@@ -204,6 +206,33 @@ class MalNotificationItem {
         isApproved: isApproved ?? this.isApproved,
         date: date,
       );
+
+  /// The item as [fromJson] reads it back (kept on the device by the hub).
+  Map<String, Object?> toJson() => {
+        'id': rawId,
+        'typeIdentifier': typeIdentifier,
+        'categoryName': categoryName,
+        'createdAt': createdAt == null ? null : createdAt!.millisecondsSinceEpoch ~/ 1000,
+        'createdAtForDisplay': createdAtForDisplay,
+        'isRead': isRead,
+        'isDeleted': isDeleted,
+        'url': url,
+        'friendName': actorName,
+        'friendProfileUrl': actorProfileUrl,
+        'friendImageUrl': actorImageUrl,
+        'text': text,
+        'topicTitle': topicTitle,
+        'topicUrl': topicUrl,
+        'clubName': clubName,
+        'clubUrl': clubUrl,
+        'pageTitle': pageTitle,
+        'pageUrl': pageUrl,
+        'anime': anime?.toJson(),
+        'animes': [for (final a in animes) a.toJson()],
+        'planName': planName,
+        'isApproved': isApproved,
+        'date': date,
+      };
 
   /// Reads one entry of `items` / `historyItems`; null when it has no id.
   static MalNotificationItem? fromJson(Object? json) {
@@ -635,8 +664,55 @@ class FriendActivity {
   bool get isDropped => status == 'dropped';
   bool get isCompleted => status == 'completed';
 
+  /// A title the friend has just begun: watching or reading, at most one episode or chapter
+  /// in (MAL's feed has a row for every later episode too, which are not news).
+  bool get isStarted => (status == 'watching' || status == 'reading') && (progress ?? 0) <= 1;
+
+  /// A change worth a notification: started, completed or dropped.
+  bool get isNews => isStarted || isCompleted || isDropped;
+
   /// Same friend, title and state: the same update seen twice.
   String get key => '$friend|$category|$malId|${status ?? statusText}|${progress ?? ''}';
+
+  Map<String, Object?> toJson() => {
+        'friend': friend,
+        'friendImageUrl': friendImageUrl,
+        'category': category,
+        'malId': malId,
+        'title': title,
+        'link': link,
+        'mediaType': mediaType,
+        'statusText': statusText,
+        'status': status,
+        'progress': progress,
+        'total': total,
+        'date': date?.millisecondsSinceEpoch,
+      };
+
+  static FriendActivity? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final friend = json['friend'];
+    final title = json['title'];
+    final malId = json['malId'];
+    if (friend is! String || title is! String || malId is! int) return null;
+    String? str(String k) => json[k] is String ? json[k] as String : null;
+    int? number(String k) => json[k] is int ? json[k] as int : null;
+    final date = number('date');
+    return FriendActivity(
+      friend: friend,
+      friendImageUrl: str('friendImageUrl'),
+      category: str('category') ?? 'anime',
+      malId: malId,
+      title: title,
+      link: str('link') ?? '',
+      mediaType: str('mediaType'),
+      statusText: str('statusText'),
+      status: str('status'),
+      progress: number('progress'),
+      total: number('total'),
+      date: date == null ? null : DateTime.fromMillisecondsSinceEpoch(date),
+    );
+  }
 
   FriendActivity withFriendImage(String? url) => FriendActivity(
         friend: friend,

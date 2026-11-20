@@ -4,11 +4,17 @@ import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/user_profile/sections/profile_tab.dart';
 import 'package:mywatchlist/services/api/MAL/user_anime_statistics.dart' show ListStats;
 import 'package:mywatchlist/user/list_cache/list_status_cache.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
+import 'package:mywatchlist/user/preferences/preferences_bloc.dart';
+import 'package:mywatchlist/user/user_mal_v2.dart';
 import 'package:mywatchlist/utils/app_routes.dart';
 import 'package:mywatchlist/widgets/common/list_sort_filter.dart';
 import 'package:mywatchlist/widgets/user/list/cards/entry_cards.dart';
 import 'package:mywatchlist/widgets/user/list/cards/entry_parts.dart';
+import 'package:mywatchlist/widgets/user/edit/list_entry_service.dart';
+import 'package:mywatchlist/widgets/user/list/bulk/list_bulk.dart';
+import 'package:mywatchlist/widgets/user/list/cards/my_list_mark.dart';
 import 'package:mywatchlist/widgets/user/list/list_entry_view.dart';
 import 'package:mywatchlist/widgets/user/list/list_query.dart';
 import 'package:mywatchlist/widgets/user/list/list_view_store.dart';
@@ -17,6 +23,9 @@ import 'package:mywatchlist/widgets/user/list/user_list_controller.dart';
 import 'package:mywatchlist/widgets/user/list/user_list_tab.dart'
     show listGridDelegate, listGridPadding;
 import 'package:mywatchlist/widgets/user/profile/profile_states.dart';
+
+/// What the List tab shows next to the signed-in user's own list.
+enum _Compare { all, common, missing }
 
 /// Status filters of the List tab, "All" first (DailyAL's order).
 const List<ListEntryStatus?> _statuses = [
@@ -42,6 +51,7 @@ class ListSection extends StatefulWidget {
 
   /// Overrides for tests.
   final MalUserListAdapter? adapter;
+  final ListStatusCache? myList;
 
   const ListSection({
     super.key,
@@ -49,6 +59,7 @@ class ListSection extends StatefulWidget {
     required this.anime,
     required this.manga,
     this.adapter,
+    this.myList,
   });
 
   @override
@@ -72,6 +83,29 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
 
   String _category = 'anime';
   ListEntryStatus? _status;
+  _Compare _compare = _Compare.all;
+
+  /// Titles picked to add to (or remove from) the signed-in user's list.
+  final ListSelection _selection = ListSelection();
+
+  /// The entries shown last (after the compare filter), for "select all".
+  List<ListEntryView> _shown = const [];
+
+  /// Whether the signed-in user can write a MAL list (bulk add needs it).
+  bool get _canWrite => const MalListEntryService().canEdit && UserMalV2.instance.username != null;
+
+  /// The signed-in user's own statuses (the whole list is kept there).
+  ListStatusCache get _mine => widget.myList ?? ListStatusCache.instance;
+
+  /// Whether the signed-in user's list shows here: the setting is on and the profile is not
+  /// theirs.
+  bool _comparing(BuildContext context) {
+    final on = context.select<PreferencesBloc, bool>((b) => b.state.general.showMyListOnProfiles);
+    final me = UserMalV2.instance.username;
+    return on && (me == null || me.toLowerCase() != widget.username.toLowerCase());
+  }
+
+  bool _inMine(ListEntryView e) => _mine.entryOf(e.id, category: e.category) != null;
 
   bool get _isAnime => _category == 'anime';
 
@@ -173,6 +207,7 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
     }
     _busy.dispose();
     _cache.dispose();
+    _selection.dispose();
     super.dispose();
   }
 
@@ -181,27 +216,90 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
     super.build(context);
     final controller = _current;
     return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) => ProfileTabScroll(
+      listenable: Listenable.merge([controller, _selection]),
+      builder: (context, _) => Stack(
+        children: [
+          ProfileTabScroll(
         storageKey: 'list_${widget.username}_$_category',
         slivers: [
           SliverPersistentHeader(
             pinned: true,
             delegate: _HeaderDelegate(
-              child: _header(context),
+              child: _header(context, comparing: _comparing(context)),
               color: Theme.of(context).colorScheme.surface,
             ),
           ),
-          ..._body(context, controller),
+          ..._body(context, controller, comparing: _comparing(context)),
+          if (_selection.active) const SliverToBoxAdapter(child: SizedBox(height: 120)),
+        ],
+      ),
+          if (_selection.active)
+            PositionedDirectional(start: 0, end: 0, bottom: 0, child: _bulkBar(context)),
         ],
       ),
     );
   }
 
-  Widget _header(BuildContext context) {
+  List<ListEntryView> _picked() => [for (final e in _shown) if (_selection.contains(e.id)) e];
+
+  Widget _bulkBar(BuildContext context) {
+    final s = S.of(context);
+    final picked = _picked();
+    final inMine = [for (final e in picked) if (_inMine(e)) e];
+    return BulkActionBar(
+      selection: _selection,
+      shown: [for (final e in _shown) e.id],
+      actions: [
+        BulkAction(
+          icon: Icons.playlist_add_rounded,
+          label: s.Bulk_Add_Mine,
+          onPressed: picked.isEmpty ? null : () => _addToMine(picked),
+        ),
+        BulkAction(
+          icon: Icons.playlist_remove_rounded,
+          label: s.Bulk_Remove_Mine,
+          destructive: true,
+          onPressed: inMine.isEmpty ? null : () => _removeFromMine(inMine),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _addToMine(List<ListEntryView> picked) async {
+    final s = S.of(context);
+    final status = await pickBulkStatus(
+      context,
+      isAnime: _isAnime,
+      count: picked.length,
+      title: s.Bulk_Add_Title(picked.length),
+    );
+    if (status == null || !mounted) return;
+    final writer = MalBulkWriter(cache: _mine);
+    await runBulkWithProgress(
+      context,
+      total: picked.length,
+      work: (onProgress) => writer.setStatus(picked, status, onProgress: onProgress),
+    );
+    if (mounted) _selection.stop();
+  }
+
+  Future<void> _removeFromMine(List<ListEntryView> picked) async {
+    if (!await confirmBulkRemove(context, picked.length) || !mounted) return;
+    final writer = MalBulkWriter(cache: _mine);
+    await runBulkWithProgress(
+      context,
+      total: picked.length,
+      work: (onProgress) => writer.remove(picked, onProgress: onProgress),
+    );
+    if (mounted) _selection.stop();
+  }
+
+  Widget _header(BuildContext context, {required bool comparing}) {
     final s = S.of(context);
     final settings = _settingsOf(_category);
     final filterCount = settings.filter.activeCount;
+    final loaded = _current.entries;
+    final common = comparing ? loaded.where(_inMine).length : 0;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -225,6 +323,21 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
                   onSelectionChanged: (v) => _select(category: v.first),
                 ),
                 const Spacer(),
+                if (_canWrite)
+                  IconButton(
+                    tooltip: s.Bulk_Select,
+                    isSelected: _selection.active,
+                    icon: const Icon(Icons.checklist_rounded),
+                    selectedIcon: Icon(Icons.checklist_rounded, color: Theme.of(context).colorScheme.primary),
+                    onPressed: () => _selection.active ? _selection.stop() : _selection.start(),
+                  ),
+                if (comparing)
+                  _CompareButton(
+                    value: _compare,
+                    common: common,
+                    missing: loaded.length - common,
+                    onChanged: (v) => setState(() => _compare = v),
+                  ),
                 IconButton(
                   tooltip: s.UserList_Sort,
                   icon: Icon(settings.direction == SortDirection.ascending
@@ -279,9 +392,14 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
     );
   }
 
-  List<Widget> _body(BuildContext context, UserListTabController c) {
+  List<Widget> _body(BuildContext context, UserListTabController c, {required bool comparing}) {
     final s = S.of(context);
-    final entries = c.entries;
+    final compare = comparing ? _compare : _Compare.all;
+    final entries = switch (compare) {
+      _Compare.all => c.entries,
+      _Compare.common => c.entries.where(_inMine).toList(),
+      _Compare.missing => c.entries.where((e) => !_inMine(e)).toList(),
+    };
     Widget fill(Widget child) => SliverFillRemaining(hasScrollBody: false, child: child);
     if (entries.isEmpty) {
       final error = c.error;
@@ -306,8 +424,28 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
           )),
         ];
       }
+      if (compare != _Compare.all && c.entries.isNotEmpty) {
+        return [
+          fill(ProfileMessage(
+            icon: compare == _Compare.common ? Icons.compare_arrows_rounded : Icons.playlist_add_check_rounded,
+            title: compare == _Compare.common ? s.Mlp_None_Common : s.Mlp_None_Missing,
+            actionLabel: s.Mlp_Show_All,
+            onAction: () => setState(() => _compare = _Compare.all),
+          )),
+          SliverToBoxAdapter(child: _Footer(controller: c)),
+        ];
+      }
       return [fill(ProfileMessage(icon: Icons.inbox_outlined, title: s.Pl_List_Empty))];
     }
+
+    _shown = entries;
+    if (_selection.active) _selection.retain(entries.map((e) => e.id));
+    Widget pickable(ListEntryView e, Widget card) =>
+        SelectableEntry(selection: _selection, id: e.id, child: card);
+
+    Widget? mark(ListEntryView e, {bool dense = false}) => comparing
+        ? MyListMark(id: e.id, category: e.category, dense: dense, onImage: dense, cache: _mine)
+        : null;
 
     final now = DateTime.now();
     final display = c.settings.display;
@@ -319,14 +457,15 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
         sliver: SliverGrid.builder(
           gridDelegate: listGridDelegate(display),
           itemCount: entries.length,
-          itemBuilder: (context, i) => EntryGridCard(
+          itemBuilder: (context, i) => pickable(entries[i], EntryGridCard(
             key: ValueKey(entries[i].id),
             entry: entries[i],
             subType: display.subType,
             actions: _actions,
             style: style,
             now: now,
-          ),
+            mark: mark(entries[i], dense: true),
+          )),
         ),
       );
     } else {
@@ -336,7 +475,7 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
       list = SliverFixedExtentList.builder(
         itemExtent: listRowExtent(subType),
         itemCount: entries.length,
-        itemBuilder: (context, i) => EntryListTile(
+        itemBuilder: (context, i) => pickable(entries[i], EntryListTile(
           key: ValueKey(entries[i].id),
           entry: entries[i],
           subType: subType,
@@ -344,7 +483,8 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
           style: style,
           now: now,
           locale: locale,
-        ),
+          mark: mark(entries[i], dense: subType == DisplaySubType.compact),
+        )),
       );
     }
     return [
@@ -352,6 +492,62 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
       list,
       SliverToBoxAdapter(child: _Footer(controller: c)),
     ];
+  }
+}
+
+/// Compare with the signed-in user's list: all the titles, the ones both lists hold, or the
+/// ones the user does not have. The counts cover the titles loaded so far.
+class _CompareButton extends StatelessWidget {
+  const _CompareButton({required this.value, required this.common, required this.missing, required this.onChanged});
+
+  final _Compare value;
+  final int common;
+  final int missing;
+  final ValueChanged<_Compare> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    PopupMenuEntry<_Compare> item(_Compare v, IconData icon, String label, int? count) => CheckedPopupMenuItem(
+          value: v,
+          checked: v == value,
+          child: Row(
+            children: [
+              Icon(icon, size: 20),
+              const SizedBox(width: 12),
+              Flexible(child: Text(count == null ? label : s.Mlp_Count(label, count))),
+            ],
+          ),
+        );
+    return PopupMenuButton<_Compare>(
+      tooltip: s.Mlp_Compare,
+      onSelected: onChanged,
+      icon: Badge(
+        isLabelVisible: value != _Compare.all,
+        smallSize: 8,
+        backgroundColor: scheme.primary,
+        child: Icon(Icons.compare_arrows_rounded, color: value == _Compare.all ? null : scheme.primary),
+      ),
+      itemBuilder: (context) => [
+        PopupMenuItem<_Compare>(
+          enabled: false,
+          height: 36,
+          child: Text(s.Mlp_Compare, style: Theme.of(context).textTheme.labelLarge),
+        ),
+        item(_Compare.all, Icons.list_rounded, s.Mlp_All, null),
+        item(_Compare.common, Icons.person_rounded, s.Mlp_Common, common),
+        item(_Compare.missing, Icons.person_off_outlined, s.Mlp_Missing, missing),
+        PopupMenuItem<_Compare>(
+          enabled: false,
+          height: 32,
+          child: Text(
+            s.Mlp_Loaded_Hint,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ),
+      ],
+    );
   }
 }
 

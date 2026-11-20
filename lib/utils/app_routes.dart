@@ -10,11 +10,12 @@ import 'package:mywatchlist/screens/MAL/contentdetailedscreen.dart';
 import 'package:mywatchlist/screens/bookmarks_screen.dart';
 import 'package:mywatchlist/screens/calendar/calendar_screen.dart';
 import 'package:mywatchlist/screens/home_screen.dart';
-import 'package:mywatchlist/screens/mal_web/message_thread_screen.dart';
+import 'package:mywatchlist/screens/mal_web/mal_chat_screen.dart';
 import 'package:mywatchlist/screens/mal_web/messages_screen.dart';
 import 'package:mywatchlist/screens/manage_accounts_page.dart';
 import 'package:mywatchlist/screens/search/general_search_screen.dart';
 import 'package:mywatchlist/screens/search/search_filters.dart';
+import 'package:mywatchlist/screens/settings/data_source_settings.dart';
 import 'package:mywatchlist/screens/settings/about_settings.dart';
 import 'package:mywatchlist/screens/settings/anime_manga_settings.dart';
 import 'package:mywatchlist/screens/settings/backup_settings.dart';
@@ -29,7 +30,6 @@ import 'package:mywatchlist/screens/settings/storage_settings.dart';
 import 'package:mywatchlist/screens/settings/theme_settings.dart';
 import 'package:mywatchlist/screens/settings/user_prefs_settings.dart';
 import 'package:mywatchlist/screens/user_profile/user_profile_screen.dart';
-import 'package:mywatchlist/services/api/MAL/web/mal_messages_api.dart' show MalMessage;
 import 'package:mywatchlist/services/auth/anilist_auth_v2.dart';
 import 'package:mywatchlist/services/auth/mal_auth_v2.dart';
 import 'package:mywatchlist/services/auth/simkl_auth_v2.dart';
@@ -95,6 +95,8 @@ abstract final class AppRoutes {
         return const BackupRestoreSettingsPage();
       case SettingsSection.storage:
         return const StorageSettingsPage();
+      case SettingsSection.dataSources:
+        return const DataSourceSettingsPage();
       case SettingsSection.about:
         return const AboutSettingsPage();
     }
@@ -206,23 +208,13 @@ abstract final class AppRoutes {
   static Future<void> openMalMessages(BuildContext context, {bool sent = false}) =>
       push<void>(context, MalMessagesScreen(initialTab: sent ? 1 : 0));
 
-  /// Opens the thread of MyAnimeList message [id] (a message of the sent box with [sent]).
-  /// Only the id is known (a notification, a link): subject and names come from the page.
+  /// Opens the chat that holds MyAnimeList message [id] (a message of the sent box with
+  /// [sent]). Only the id is known (a notification, a link): the person comes from MAL.
   static Future<void> openMalMessage(BuildContext context,
           {required int id, bool sent = false, int? threadId}) =>
       push<void>(
         context,
-        MalMessageThreadScreen(
-          message: MalMessage(
-            id: id,
-            counterpart: '',
-            subject: '',
-            // An inbox message reached from its notification is unread: reading it lowers the badge.
-            isRead: sent,
-            isSent: sent,
-            threadId: threadId,
-          ),
-        ),
+        MalChatScreen(counterpart: '', messageId: id, messageSent: sent, messageThreadId: threadId),
       );
 
   /// Opens the login screen (tracker picker), replacing nothing.

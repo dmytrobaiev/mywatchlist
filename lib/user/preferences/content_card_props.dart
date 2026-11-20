@@ -150,11 +150,19 @@ class ContentCardProps extends Equatable {
   final double height;
   final List<CustomizableField> fields;
 
+  /// Width of the cover field; [defaultImageWidth] when the layout never set it.
+  final double imageWidth;
+
+  static const double defaultImageWidth = 86;
+  static const double minImageWidth = 24;
+  static const double maxImageWidth = 160;
+
   const ContentCardProps({
     required this.id,
     required this.profileName,
     required this.height,
     required this.fields,
+    this.imageWidth = defaultImageWidth,
   });
 
   /// DailyAL's default card: 140 px high with its default field layout.
@@ -170,18 +178,21 @@ class ContentCardProps extends Equatable {
     String? profileName,
     double? height,
     List<CustomizableField>? fields,
+    double? imageWidth,
   }) =>
       ContentCardProps(
         id: id ?? this.id,
         profileName: profileName ?? this.profileName,
         height: height ?? this.height,
         fields: fields != null ? List.unmodifiable(fields) : this.fields,
+        imageWidth: imageWidth ?? this.imageWidth,
       );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'profileName': profileName,
         'height': height,
+        'imageWidth': imageWidth,
         'fields': fields.map((e) => e.toJson()).toList(),
       };
 
@@ -198,12 +209,98 @@ class ContentCardProps extends Equatable {
       profileName: readString(json, 'profileName', d.profileName),
       height: readDouble(json, 'height', d.height),
       fields: List.unmodifiable(fields),
+      imageWidth: readDouble(json, 'imageWidth', defaultImageWidth)
+          .clamp(minImageWidth, maxImageWidth)
+          .toDouble(),
     );
   }
 
   @override
-  List<Object?> get props => [id, profileName, height, fields];
+  List<Object?> get props => [id, profileName, height, fields, imageWidth];
 }
+
+CustomizableField _at(CustomizableFieldType type,
+        {double? top, double? left, double? right, double? bottom, bool hidden = false}) =>
+    CustomizableField(
+      type: type,
+      position: FieldPosition(top: top, left: left, right: right, bottom: bottom),
+      hidden: hidden,
+    );
+
+/// A built-in list style (Comfortable, Compact, Spacious) as an editable custom card: same
+/// height, cover size and field places as the built-in row, so a user can start from the style
+/// they like and change one thing. Fields the style does not show are kept, hidden.
+ContentCardProps builtInCardLayout(BuiltInCardStyle style) {
+  final List<CustomizableField> shown;
+  final double height;
+  final double imageWidth;
+  switch (style) {
+    case BuiltInCardStyle.compact:
+      // Title, then your score, progress and stepper on the right.
+      height = 56;
+      imageWidth = 36;
+      shown = [
+        _at(CustomizableFieldType.image, top: 4, left: 6),
+        // The title field takes two lines: the score sits between it and the progress.
+        _at(CustomizableFieldType.title, top: 8, left: 52, right: 256),
+        _at(CustomizableFieldType.list_score, top: 18, right: 214),
+        _at(CustomizableFieldType.edit_and_watched_button, top: 8, right: 8),
+      ];
+    case BuiltInCardStyle.comfortable:
+      // Mean score, title, media line; your score, progress and stepper at the bottom.
+      height = 128;
+      imageWidth = 84;
+      shown = [
+        _at(CustomizableFieldType.image, top: 4, left: 4),
+        _at(CustomizableFieldType.un_seen_episodes, bottom: 10, left: 56),
+        _at(CustomizableFieldType.mean_score, top: 6, left: 100),
+        _at(CustomizableFieldType.title, top: 26, left: 100, right: 8),
+        _at(CustomizableFieldType.media_type, top: 68, left: 100),
+        _at(CustomizableFieldType.list_score, bottom: 14, left: 100),
+        _at(CustomizableFieldType.edit_and_watched_button, bottom: 6, right: 8),
+      ];
+    case BuiltInCardStyle.spacious:
+      // As Comfortable, plus members, genres and the next episode line.
+      height = 168;
+      imageWidth = 112;
+      shown = [
+        _at(CustomizableFieldType.image, top: 4, left: 4),
+        _at(CustomizableFieldType.un_seen_episodes, bottom: 10, left: 84),
+        _at(CustomizableFieldType.mean_score, top: 6, left: 128),
+        _at(CustomizableFieldType.num_list_users, top: 8, left: 190),
+        _at(CustomizableFieldType.title, top: 26, left: 128, right: 8),
+        _at(CustomizableFieldType.media_type, top: 68, left: 128),
+        _at(CustomizableFieldType.genre, top: 86, left: 128, right: 8),
+        _at(CustomizableFieldType.next_episode_full_counter, top: 104, left: 128, right: 8),
+        _at(CustomizableFieldType.list_score, bottom: 14, left: 128),
+        _at(CustomizableFieldType.edit_and_watched_button, bottom: 6, right: 8),
+      ];
+  }
+  final types = {for (final f in shown) f.type};
+  return ContentCardProps(
+    id: '',
+    profileName: '',
+    height: height,
+    imageWidth: imageWidth,
+    fields: List.unmodifiable([
+      ...shown,
+      for (final type in CustomizableFieldType.values)
+        if (!types.contains(type))
+          CustomizableField(
+            type: type,
+            position: defaultCustomizableFields
+                    .where((d) => d.type == type)
+                    .firstOrNull
+                    ?.position ??
+                const FieldPosition(top: 5, left: 5),
+            hidden: true,
+          ),
+    ]),
+  );
+}
+
+/// The built-in list styles a custom card can start from.
+enum BuiltInCardStyle { comfortable, compact, spacious }
 
 /// DailyAL's default field layout of a list card.
 const List<CustomizableField> defaultCustomizableFields = [

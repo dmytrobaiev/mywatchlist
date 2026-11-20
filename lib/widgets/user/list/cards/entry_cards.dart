@@ -24,6 +24,9 @@ class EntryListTile extends StatelessWidget {
   final DateTime now;
   final String locale;
 
+  /// A mark of the signed-in user's own entry (another user's list), after the status.
+  final Widget? mark;
+
   const EntryListTile({
     super.key,
     required this.entry,
@@ -32,10 +35,14 @@ class EntryListTile extends StatelessWidget {
     required this.style,
     required this.now,
     required this.locale,
+    this.mark,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      AiringScheduleListener(entry: entry, builder: _build);
+
+  Widget _build(BuildContext context) {
     final body = switch (subType) {
       DisplaySubType.compact => _compact(context),
       DisplaySubType.spacious => _rich(context, spacious: true),
@@ -97,6 +104,7 @@ class EntryListTile extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     MyScore(entry: entry, fontSize: 11),
+                    if (mark != null) ...[const SizedBox(width: 6), mark!],
                     if (entry.timesRewatched > 0) ...[
                       const SizedBox(width: 6),
                       RewatchPill(entry: entry, short: true),
@@ -125,6 +133,7 @@ class EntryListTile extends StatelessWidget {
     final airing = style.showAiringInfo || spacious ? airingText(entry, now, locale) : null;
     final badges = <Widget>[
       if (style.showStatus) StatusPill(entry: entry),
+      if (mark != null) mark!,
       if (style.showPriority && entry.priority > 0) PriorityPill(priority: entry.priority),
       if (entry.timesRewatched > 0) RewatchPill(entry: entry),
       MeanScore(entry: entry, showMembers: spacious),
@@ -337,6 +346,9 @@ class EntryGridCard extends StatelessWidget {
   final EntryCardStyle style;
   final DateTime now;
 
+  /// A mark of the signed-in user's own entry (another user's list), drawn on the cover.
+  final Widget? mark;
+
   const EntryGridCard({
     super.key,
     required this.entry,
@@ -344,12 +356,16 @@ class EntryGridCard extends StatelessWidget {
     required this.actions,
     required this.style,
     required this.now,
+    this.mark,
   });
 
   void _edit() => actions.onEdit?.call(entry);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      AiringScheduleListener(entry: entry, builder: _build);
+
+  Widget _build(BuildContext context) {
     final card = switch (subType) {
       DisplaySubType.compact => _compact(context),
       DisplaySubType.cover_only_grid => _cover(context, rounded: BorderRadius.circular(gridCardRadius)),
@@ -368,8 +384,17 @@ class EntryGridCard extends StatelessWidget {
   }
 
   /// Cover with the episode badges, the airing band and the priority flag.
-  Widget _cover(BuildContext context, {required BorderRadius rounded, List<Widget> extra = const []}) {
-    final airing = style.showAiringInfo ? airingText(entry, now, Localizations.localeOf(context).toString()) : null;
+  /// The airing line drawn over the top of the cover, null when off or not airing.
+  String? _airing(BuildContext context) =>
+      style.showAiringInfo ? airingText(entry, now, Localizations.localeOf(context).toString()) : null;
+
+  /// Top of the first badge row: under the airing band when it is drawn.
+  double _badgeTop(BuildContext context) => _airing(context) != null ? 22 : 7;
+
+  /// [dubBelow] moves the dub badge down past a badge the caller draws at the top start.
+  Widget _cover(BuildContext context,
+      {required BorderRadius rounded, List<Widget> extra = const [], double dubBelow = 0}) {
+    final airing = _airing(context);
     final tokens = AppColors.of(context);
     final look = ListEntryLookScope.of(context);
     return Stack(
@@ -405,10 +430,18 @@ class EntryGridCard extends StatelessWidget {
           child: EntryEpisodeBadges(entry: entry, now: now),
         ),
         PositionedDirectional(
-          top: airing != null ? 22 : 7,
+          top: (airing != null ? 22 : 7) + dubBelow,
           start: 5,
           child: EntryDubBadge(entry: entry),
         ),
+        // The compact card has its title at the bottom: the mark goes under the top badges.
+        if (mark != null)
+          PositionedDirectional(
+            top: subType == DisplaySubType.compact ? (airing != null ? 22 : 7) + 24 : null,
+            bottom: subType == DisplaySubType.compact ? null : 5,
+            end: 5,
+            child: mark!,
+          ),
         if ((style.showPriority && entry.priority > 0) ||
             entry.timesRewatched > 0 ||
             look.cardBadges(entry).isNotEmpty)
@@ -489,7 +522,7 @@ class EntryGridCard extends StatelessWidget {
       if (hasMembers) format.format(members),
     ].join(' | ');
     final onEdit = actions.onEdit == null ? null : _edit;
-    return _cover(context, rounded: radius, extra: [
+    return _cover(context, rounded: radius, dubBelow: meanText.isNotEmpty ? 24 : 0, extra: [
       // Static scrim (no blur) under the title, as DailyAL's fading effect.
       PositionedDirectional(
         start: 0,
@@ -535,7 +568,8 @@ class EntryGridCard extends StatelessWidget {
         ),
       if (meanText.isNotEmpty)
         PositionedDirectional(
-          top: 7,
+          // Under the airing band when it is shown, never over it.
+          top: _badgeTop(context),
           start: 5,
           child: DecoratedBox(
             decoration: BoxDecoration(color: tokens.imageScrim, borderRadius: radius),

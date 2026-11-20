@@ -10,6 +10,7 @@ import 'package:mywatchlist/cache/cachemanager.dart';
 import 'package:mywatchlist/screens/user_profile/sections/profile_tabs_source.dart';
 import 'package:mywatchlist/services/api/MAL/web/mal_web_client.dart';
 import 'package:mywatchlist/services/api/MAL/web/mal_web_form_submitter.dart';
+import 'package:mywatchlist/services/api/MAL/web/mal_web_store.dart';
 import 'package:mywatchlist/services/api/MAL/web/profile_comments_api.dart' show checkWriteAnswer;
 import 'package:mywatchlist/services/auth/mal_web_session.dart';
 import 'package:mywatchlist/user/user_mal_v2.dart';
@@ -44,6 +45,15 @@ class MalMessage {
   /// The other person's picture, when the row shows one.
   final String? avatarUrl;
 
+  /// The id of the row itself (`div#message_<id>`, the `id` MAL's Delete form posts); it is
+  /// not the id of the message's page ([id]).
+  final int? rowId;
+
+  /// A sent-box row the recipient has not opened yet: false when MAL marks the row `unread`.
+  /// MAL marks its sent rows `read` as soon as they are sent (seen 2026-11-20), so `read`
+  /// says nothing: null then, and for inbox rows.
+  final bool? recipientRead;
+
   const MalMessage({
     required this.id,
     required this.counterpart,
@@ -56,6 +66,8 @@ class MalMessage {
     this.replyId,
     int? box,
     this.avatarUrl,
+    this.recipientRead,
+    this.rowId,
   }) : box = box ?? (isSent ? 2 : 1);
 
   MalMessage copyWith({bool? isRead, int? threadId, int? replyId}) => MalMessage(
@@ -70,7 +82,49 @@ class MalMessage {
         replyId: replyId ?? this.replyId,
         box: box,
         avatarUrl: avatarUrl,
+        recipientRead: recipientRead,
+        rowId: rowId,
       );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'counterpart': counterpart,
+        'subject': subject,
+        'preview': preview,
+        'date': date,
+        'isRead': isRead,
+        'isSent': isSent,
+        'threadId': threadId,
+        'replyId': replyId,
+        'box': box,
+        'avatarUrl': avatarUrl,
+        'recipientRead': recipientRead,
+        'rowId': rowId,
+      };
+
+  static MalMessage? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final id = json['id'];
+    final who = json['counterpart'];
+    if (id is! int || who is! String) return null;
+    String? str(String k) => json[k] is String ? json[k] as String : null;
+    int? number(String k) => json[k] is int ? json[k] as int : null;
+    return MalMessage(
+      id: id,
+      counterpart: who,
+      subject: str('subject') ?? '',
+      preview: str('preview') ?? '',
+      date: str('date'),
+      isRead: json['isRead'] != false,
+      isSent: json['isSent'] == true,
+      threadId: number('threadId'),
+      replyId: number('replyId'),
+      box: number('box'),
+      avatarUrl: str('avatarUrl'),
+      recipientRead: json['recipientRead'] is bool ? json['recipientRead'] as bool : null,
+      rowId: number('rowId'),
+    );
+  }
 
   /// The page of this message on MAL.
   String get url => '${MalWebClient.base}/mymessages.php?go=read&id=$id${isSent ? '&f=1' : ''}';
@@ -116,6 +170,17 @@ class MalMessageThread {
   final int? threadId;
   final int? replyId;
 
+  /// The thread of the "View Message History" link, on a page shown without its history (a
+  /// message the user sent, opened without its thread).
+  final int? historyThreadId;
+
+  /// The page had MAL's history table.
+  final bool hasHistory;
+
+  /// The id of the page of the message answered ([MalMessage.id]), to read the thread again;
+  /// [replyId] is the id of its row, which MAL's pages do not take.
+  final int? pageId;
+
   const MalMessageThread({
     required this.subject,
     required this.counterpart,
@@ -123,6 +188,9 @@ class MalMessageThread {
     this.avatarUrl,
     this.threadId,
     this.replyId,
+    this.historyThreadId,
+    this.hasHistory = true,
+    this.pageId,
   });
 
   bool get canReply => replyId != null && threadId != null;
@@ -266,6 +334,8 @@ MalMessage? parseMessageRow(Element row, {required bool sent}) {
     date: date.isEmpty ? null : date,
     isRead: sent || !row.classes.contains('unread'),
     isSent: sent,
+    recipientRead: sent && row.classes.contains('unread') ? false : null,
+    rowId: _int(_rowId.firstMatch(row.id)?.group(1)),
     threadId: threadId,
     replyId: replyId,
     box: box,
@@ -363,6 +433,20 @@ String _bodyHtml(Element td) {
 
 String _norm(String htmlBody) => _clean(html.parseFragment(htmlBody).text).toLowerCase();
 
+/// The text of a message body (HTML) reduced for comparison: tags dropped, spaces folded,
+/// lower case. Two copies of one message (thread page, sent locally) give the same key.
+///
+/// Pictures count too (`[img]` becomes MAL's `<img>`): a message of one picture has a key.
+String messageTextKey(String htmlBody) {
+  final text = _norm(htmlBody);
+  final pictures = RegExp(r'<img\b', caseSensitive: false).allMatches(htmlBody).length;
+  return pictureKey(text, pictures);
+}
+
+/// [text] followed by a mark for [pictures] pictures (none: [text] alone).
+String pictureKey(String text, int pictures) =>
+    pictures == 0 ? text : (text.isEmpty ? '[img$pictures]' : '$text [img$pictures]');
+
 /// A `mymessages.php?go=read&id=…[&threadid=…]` page: the message in `td.dialog-text`, the
 /// Reply button's ids (`replyid`, `threadid`, `toname` in its `onclick`, as MALClient read
 /// them) and the thread in `table.pmessage-message-history` (`td` date, sender, text). [me] is
@@ -395,6 +479,15 @@ MalMessageThread? parseMessageThread(String raw, {String? subject, String? count
     final t = _tonameParam.firstMatch(s)?.group(1);
     if (t != null) toname = Uri.decodeQueryComponent(t);
     if (replyId != null) break;
+  }
+
+  int? historyThreadId;
+  if (threadId == null) {
+    for (final a in doc.querySelectorAll('a[href*="threadid="]')) {
+      final h = (a.attributes['href'] ?? '').replaceAll('&amp;', '&');
+      historyThreadId = _int(_threadParam.firstMatch(h)?.group(1));
+      if (historyThreadId != null) break;
+    }
   }
 
   final history = <MalThreadMessage>[];
@@ -451,6 +544,8 @@ MalMessageThread? parseMessageThread(String raw, {String? subject, String? count
     messages: List.unmodifiable(messages),
     threadId: threadId,
     replyId: replyId,
+    historyThreadId: historyThreadId,
+    hasHistory: table != null,
   );
 }
 
@@ -469,6 +564,18 @@ void checkSendAnswer(http.Response response) {
   if (doc.querySelector('.goodresult') != null) return;
   if (doc.querySelector('textarea[name=message]') != null) {
     throw MalWebActionFailed(statusCode: code);
+  }
+}
+
+/// The answer of MAL's Delete form: its redirect back to the boxes, or a page without an error
+/// box. A refusal (`badresult`, an error status) throws [MalWebActionFailed].
+void checkDeleteAnswer(http.Response response) {
+  final code = response.statusCode;
+  if (code >= 300 && code < 400) return;
+  if (code != 200) throw MalWebActionFailed(message: 'MAL answered $code');
+  final bad = RegExp(r'class="[^"]*\bbadresult\b[^"]*"[^>]*>([\s\S]*?)</div>').firstMatch(response.body);
+  if (bad != null) {
+    throw MalWebActionFailed(message: html.parseFragment(bad.group(1)!).text?.trim());
   }
 }
 
@@ -579,6 +686,15 @@ class MalMessagesApi {
 
   static const int pageSize = 20;
 
+  /// The section of [MalWebStore] holding the inbox's first page.
+  static const String inboxSection = 'pm_inbox';
+
+  /// The inbox's first page as last read (by the app or the background job), or empty.
+  static List<MalMessage> savedInbox() {
+    final saved = MalWebStore.instance.read(inboxSection);
+    return saved is List ? [...saved.map(MalMessage.fromJson).whereType<MalMessage>()] : const [];
+  }
+
   /// Unread messages of the inbox's first page (MAL lists unread first), for a badge.
   static final ValueNotifier<int> unread = ValueNotifier<int>(0);
 
@@ -630,6 +746,8 @@ class MalMessagesApi {
     if (offset == 0) {
       unread.value = page.unread;
       _readSinceInbox.clear();
+      // For the notifications tab, the badges and the chats, at once next time.
+      MalWebStore.instance.write(inboxSection, [for (final m in page.messages) m.toJson()]);
     }
     return page;
   }
@@ -653,6 +771,16 @@ class MalMessagesApi {
     );
     if (parsed == null) throw const FormatException('Not a MAL message page');
     _markRead(message);
+    // A message the user sent, opened without its thread, comes without its history: MAL's
+    // "View Message History" link gives the thread, read once more.
+    final history = parsed.historyThreadId;
+    if (!parsed.hasHistory && thread == null && history != null) {
+      try {
+        return await this.thread(message.copyWith(threadId: history));
+      } catch (_) {
+        return parsed;
+      }
+    }
     return parsed;
   }
 
@@ -692,16 +820,27 @@ class MalMessagesApi {
     checkSendPage(result);
   }
 
-  /// Deletes [message] from its box, as MAL's Delete link does
-  /// (`includes/ajax.inc.php?t=75`, `id` + `box`).
+  /// Deletes [message] from its box with the Delete form of its MAL page
+  /// (`POST mymessages.php?go=delete` for the inbox, `go=deletesent` for the sent box, `id` =
+  /// the row id). A row read without its own id falls back on MAL's AJAX delete.
   Future<void> delete(MalMessage message) async {
     await _requireSession();
-    final response = await client.postForm(
-      '/includes/ajax.inc.php?t=75',
-      {'id': '${message.id}', 'box': '${message.box}'},
-      referer: '${MalWebClient.base}/mymessages.php${message.isSent ? '?go=sent' : ''}',
-    );
-    checkWriteAnswer(response);
+    final rowId = message.rowId;
+    if (rowId == null) {
+      final response = await client.postForm(
+        '/includes/ajax.inc.php?t=75',
+        {'id': '${message.id}', 'box': '${message.box}'},
+        referer: '${MalWebClient.base}/mymessages.php${message.isSent ? '?go=sent' : ''}',
+      );
+      checkWriteAnswer(response);
+    } else {
+      final response = await client.postForm(
+        '/mymessages.php?go=${message.isSent ? 'deletesent' : 'delete'}',
+        {'id': '$rowId'},
+        referer: message.url,
+      );
+      checkDeleteAnswer(response);
+    }
     _markRead(message);
   }
 

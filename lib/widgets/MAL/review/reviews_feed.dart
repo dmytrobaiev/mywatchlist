@@ -1,16 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_anime_review.dart';
-import 'package:mywatchlist/services/api/Jikan/jikan_api.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_fallbacks.dart';
 import 'package:mywatchlist/widgets/MAL/review/review_logic.dart';
 
 /// The pages of reviews of one title, for the detail section and the "view
 /// all" screen.
 ///
-/// The first page races Jikan `reviews` against the mwl-api `reviews` route
-/// (MAL review pages parsed by the backend), see [JikanFallbacks.race], so it
-/// ends within about 12 s; the next pages come from the source that answered
-/// first (the two number their pages differently and are never mixed). A
+/// Every page comes from MyAnimeList's own review pages, read through the
+/// mwl-api `reviews` route ([JikanFallbacks.reviews]; the backend runs inside
+/// the app when no remote server is set). Neither Jikan nor Tenrai is asked
+/// (owner, 2026-11-20): Tenrai has no reviews, Jikan is often unreachable. A
 /// failed next page keeps what is loaded and stops asking.
 class ReviewsFeed extends ChangeNotifier {
   final int id;
@@ -22,7 +21,6 @@ class ReviewsFeed extends ChangeNotifier {
   bool _loading = false;
   bool _failed = false;
   bool _hasMore = true;
-  bool _fromMwl = false;
   int _page = 1;
   bool _disposed = false;
   Map<int, int> _distribution = const {};
@@ -49,7 +47,6 @@ class ReviewsFeed extends ChangeNotifier {
       _reviews.clear();
       _page = 1;
       _hasMore = true;
-      _fromMwl = false;
       _distribution = const {};
       _tags = const [];
     }
@@ -83,22 +80,7 @@ class ReviewsFeed extends ChangeNotifier {
     _notify();
   }
 
-  Future<(List<AnimeReview>, bool)> _fetchPage() async {
-    if (_page == 1) {
-      final result = await JikanFallbacks.race<(List<AnimeReview>, bool)>(
-        jikan: _jikanPage,
-        fallback: _mwlPage,
-      );
-      _fromMwl = !result.fromJikan;
-      return result.value;
-    }
-    return _fromMwl ? _mwlPage() : _jikanPage();
-  }
-
-  Future<(List<AnimeReview>, bool)> _jikanPage() async {
-    final response = await JikanApi().getAnimeReviews(id, page: _page, category: category);
-    return (response.data, response.pagination.hasNextPage ?? false);
-  }
+  Future<(List<AnimeReview>, bool)> _fetchPage() => _mwlPage();
 
   Future<(List<AnimeReview>, bool)> _mwlPage() async {
     final list = await JikanFallbacks.reviews(id, category, _page);

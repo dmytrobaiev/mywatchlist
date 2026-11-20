@@ -67,6 +67,8 @@ class UserPrefSettingsPage extends StatelessWidget {
           autoAddStartEndDate: d.autoAddStartEndDate,
           showAiringInfo: d.showAiringInfo,
           statsChartColors: d.statsChartColors,
+          statsBreakdownChart: d.statsBreakdownChart,
+          showMyListOnProfiles: d.showMyListOnProfiles,
           preferredLinkType: d.preferredLinkType,
           detailsExpanded: d.detailsExpanded,
         )));
@@ -216,7 +218,33 @@ class UserPrefSettingsPage extends StatelessWidget {
           title: s.Prefs_Stats_Title,
           description: s.Prefs_Stats_Desc,
           children: [
+            PrefSelectTile<bool>(
+              icon: Icons.donut_large_outlined,
+              title: s.Sbc_Breakdown_View,
+              subtitle: s.Sbc_Breakdown_View_Desc,
+              options: [
+                SelectOption(false, s.Sbc_View_List),
+                SelectOption(true, s.Sbc_View_Chart),
+              ],
+              read: (p) => p.general.statsBreakdownChart,
+              toEvent: (v) =>
+                  GeneralPreferencesChanged((p) => p.copyWith(statsBreakdownChart: v)),
+            ),
             for (var i = 0; i < statsChartStatuses.length; i++) StatsChartColorTile(index: i),
+          ],
+        ),
+        PrefGroup(
+          title: s.Mlp_Group,
+          description: s.Mlp_Group_Desc,
+          children: [
+            PrefSwitchTile(
+              icon: Icons.compare_arrows_rounded,
+              title: s.Mlp_Setting,
+              subtitle: s.Mlp_Setting_Desc,
+              read: (p) => p.general.showMyListOnProfiles,
+              toEvent: (v) =>
+                  GeneralPreferencesChanged((p) => p.copyWith(showMyListOnProfiles: v)),
+            ),
           ],
         ),
       ],

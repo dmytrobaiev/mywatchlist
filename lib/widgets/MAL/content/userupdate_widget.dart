@@ -15,10 +15,11 @@ import 'package:mywatchlist/widgets/loading/shimmercolor.dart';
 /// (avatar, name, progress ring, score, age, status). A tap on a card opens the quick user
 /// sheet of that user.
 ///
-/// Sources ([JikanFallbacks.race]): Jikan `userupdates`, against the "Recently Updated By"
-/// table of MAL's stats page (mwl-api `content/updates`), which answers while Jikan is down
-/// (Tenrai has no `userupdates`). The skeleton always ends in cards, an empty state or an
-/// error with Retry within about 12 s.
+/// Sources ([JikanFallbacks.race]): Jikan `userupdates` while Jikan is the data source,
+/// against the "Recently Updated By" table of MAL's stats page (`?m=all`, all members) read
+/// on the phone without a session. Tenrai has no `userupdates`: while Jikan is muted the
+/// Jikan leg fails at once and MAL's page is the only source. The skeleton always ends in
+/// cards, an empty state or an error with Retry within about 12 s.
 class UserUpdatesPage extends StatefulWidget {
   final int id;
   final VoidCallback? onPageChange;
@@ -179,11 +180,19 @@ class _UpdateCard extends StatelessWidget {
                     child: ReviewScoreBadge(score: update.score, size: 14),
                   ),
                   if (date != null)
-                    Text(
-                      displayTimeAgo(date),
-                      style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, fontSize: 12),
+                    // Shrinks rather than overflowing the card ("3 weeks ago").
+                    Flexible(
+                      child: Text(
+                        displayTimeAgo(date),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, fontSize: 12),
+                      ),
                     ),
-                  if (nsv?.status != null) StatusBadge(nsv!, height: 25),
+                  if (nsv?.status != null) ...[
+                    const SizedBox(width: 4),
+                    StatusBadge(nsv!, height: 25),
+                  ],
                 ],
               ),
             ],
