@@ -197,7 +197,7 @@ class AnimeGraphData {
   /// so Sugiyama layout minimizes crossings.
   List<GraphEdgeData> orderedEdges(GraphOrder order) {
     if (order == GraphOrder.fromSelected) {
-      return _sortDeterministic(edges);
+      return edges;
     }
     final byPair = <(int, int), GraphEdgeData>{};
     for (final edge in edges) {
@@ -221,9 +221,9 @@ class AnimeGraphData {
         case GraphRelation.other:
           final a = nodes[edge.source]?.releaseKey;
           final b = nodes[edge.target]?.releaseKey;
-          final flip = (a != null && b != null && a != b)
-              ? a > b
-              : edge.source > edge.target;
+          final flip = (a != null && b != null)
+              ? (a != b ? a > b : edge.source > edge.target)
+              : false;
           oriented = flip
               ? GraphEdgeData(edge.target, edge.source, edge.relation)
               : edge;

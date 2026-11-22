@@ -379,10 +379,16 @@ void main() {
   });
 
   group('Top ONA', () {
-    test('Jikan is asked without adult entries when NSFW is off, pages included', () {
+    test('jikan-edge top ONA URL omits refused sfw/limit query params', () {
       final url = JikanApi.topAnimeUrl(type: 'ona', limit: 25, page: 2, sfw: true);
-      expect(url.queryParameters['sfw'], 'true');
-      expect(JikanApi.topAnimeUrl(type: 'ona', limit: 25, page: 1).queryParameters.containsKey('sfw'), isFalse);
+      expect(url.host, 'jikan.lucashdo.com');
+      expect(url.path, '/v1/anime');
+      expect(url.queryParameters['type'], 'ona');
+      expect(url.queryParameters['order_by'], 'score');
+      expect(url.queryParameters['sort'], 'desc');
+      expect(url.queryParameters['page'], '2');
+      expect(url.queryParameters.containsKey('sfw'), isFalse);
+      expect(url.queryParameters.containsKey('limit'), isFalse);
     });
   });
 }

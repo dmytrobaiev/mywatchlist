@@ -96,16 +96,16 @@ void main() {
       expect(data.orderedEdges(GraphOrder.fromSelected), data.edges);
     });
 
-    test('bySequel points every edge from the older title to the newer one',
+    test('bySequel orients semantically first and by release date for symmetric edges',
         () {
       final edges = data.orderedEdges(GraphOrder.bySequel);
       // The prequel 2->1 becomes sequel 1->2, which the explicit sequel already gave: kept once.
       expect(edges, contains(const GraphEdgeData(1, 2, GraphRelation.sequel)));
       expect(
           edges.where((e) => e.relation == GraphRelation.sequel), hasLength(1));
-      // 3 (2008) is older than 1 (2009): the side story is flipped.
+      // Derivative relations keep their parent -> sideStory direction regardless of date.
       expect(
-          edges, contains(const GraphEdgeData(3, 1, GraphRelation.sideStory)));
+          edges, contains(const GraphEdgeData(1, 3, GraphRelation.sideStory)));
       // 4 has no date: unchanged.
       expect(edges, contains(const GraphEdgeData(4, 1, GraphRelation.other)));
     });

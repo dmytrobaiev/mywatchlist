@@ -220,82 +220,77 @@ class _Walk {
   List<_Edge> unvisited(List<_Edge> list) =>
       [for (final e in list) if (!nodes.containsKey(e.target)) e];
 
-  /// `get_related_anime_with_graph`: separates BFS node discovery from edge
+  final List<_Edge> _rawEdges = [];
+
+  /// `get_related_anime_with_graph`: separates node discovery from edge
   /// retention so cross-edges between nodes in the same ring or pointing back
-  /// to already-discovered nodes are never dropped.
+  /// to already-discovered nodes are never dropped, while preserving root-walk
+  /// traversal order and stopping immediately on 429 rate limits.
   Future<void> visit(int id, {required bool includeOthers}) async {
-    final root = await fetch(id);
-    if (root == null) return;
-    addNode(root);
+    await _visitRec(id, includeOthers: includeOthers);
 
-    final rawEdges = <_Edge>[];
-    final expanded = <int>{id};
-    final queued = <int>{id};
-    final frontier = <int>[];
-
-    void collectFrom(int nodeId, Map<String, dynamic> data, {required bool others}) {
-      for (final edge in edgesOf(nodeId, data, includeOthers: others)) {
-        rawEdges.add(edge);
-        if (queued.add(edge.target)) {
-          frontier.add(edge.target);
-        }
-      }
-    }
-
-    collectFrom(id, root, others: includeOthers);
-
-    while (frontier.isNotEmpty) {
-      final batchIds = List<int>.of(frontier);
-      frontier.clear();
-      final fetched = List<Map<String, dynamic>?>.filled(batchIds.length, null);
-      var next = 0;
-      Future<void> worker() async {
-        while (next < batchIds.length) {
-          final i = next++;
-          fetched[i] = await fetch(batchIds[i]);
-        }
-      }
-
-      await Future.wait([
-        for (var w = 0; w < builder.concurrency && w < batchIds.length; w++) worker(),
-      ]);
-
-      for (var i = 0; i < batchIds.length; i++) {
-        final data = fetched[i];
-        if (data == null) continue;
-        final nodeId = batchIds[i];
-        addNode(data);
-        if (expanded.add(nodeId)) {
-          collectFrom(nodeId, data, others: false);
-        }
-      }
-    }
-
-    // Keep every valid edge whose endpoints are both in `nodes`, deduplicating
-    // inverse pairs between `{u, v}` while prioritizing `sequel`/`prequel`.
+    // Keep every valid edge whose endpoints are both in `nodes`, preserving
+    // first-seen direction from the root walk while deduplicating inverse pairs
+    // between `{u, v}` (upgrading a non-spine edge only when a `sequel` or
+    // `prequel` links the same pair).
     final byPair = <(int, int), _Edge>{};
-    for (final e in rawEdges) {
+    for (final e in _rawEdges) {
       if (e.source == e.target) continue;
       if (!nodes.containsKey(e.source) || !nodes.containsKey(e.target)) continue;
       final pair = e.source < e.target ? (e.source, e.target) : (e.target, e.source);
       final existing = byPair[pair];
-      if (existing == null || _relationPriority(e.relation) < _relationPriority(existing.relation)) {
+      if (existing == null || (!_isSpine(existing.relation) && _isSpine(e.relation))) {
         byPair[pair] = e;
       }
     }
     edges.addAll(byPair.values);
   }
 
-  static int _relationPriority(String relation) => switch (relation) {
-        'sequel' => 0,
-        'prequel' => 1,
-        'parent_story' => 2,
-        'side_story' => 3,
-        'full_story' => 4,
-        'summary' => 5,
-        'spin_off' => 6,
-        _ => 7,
-      };
+  static bool _isSpine(String relation) =>
+      relation == 'sequel' || relation == 'prequel';
+
+  Future<void> _visitRec(int id, {required bool includeOthers}) async {
+    final anime = await fetch(id);
+    if (anime == null) return;
+    addNode(anime);
+
+    final allEdges = edgesOf(id, anime, includeOthers: includeOthers);
+    _rawEdges.addAll(allEdges);
+
+    final unvisitedEdges = unvisited(allEdges);
+    if (unvisitedEdges.isEmpty) return;
+
+    final seenTargets = <int>{};
+    final targetIds = <int>[
+      for (final e in unvisitedEdges)
+        if (seenTargets.add(e.target)) e.target,
+    ];
+    final fetched = List<Map<String, dynamic>?>.filled(targetIds.length, null);
+    var next = 0;
+    Future<void> worker() async {
+      while (next < targetIds.length) {
+        final i = next++;
+        fetched[i] = await fetch(targetIds[i]);
+      }
+    }
+
+    await Future.wait([
+      for (var w = 0; w < builder.concurrency && w < targetIds.length; w++) worker(),
+    ]);
+
+    final nextIds = <int>[];
+    for (var i = 0; i < targetIds.length; i++) {
+      final neighbour = fetched[i];
+      if (neighbour == null) continue;
+      addNode(neighbour);
+      nextIds.add(targetIds[i]);
+    }
+
+    for (final nextId in nextIds) {
+      if (rateLimited) break;
+      await _visitRec(nextId, includeOthers: false);
+    }
+  }
 
   /// The node fields of mwl-rust-api's `ContentNodeDTO`. A manga's `start_date`
   /// (`2010-04-07`, `2010`) becomes a `start_season` so both kinds sort the same way.
