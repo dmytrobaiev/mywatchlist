@@ -1,0 +1,78 @@
+name: Debug APK (dev)
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: debug-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.6'
+          channel: 'stable'
+          cache: true
+
+      - name: Create assets/.env
+        env:
+          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
+          MAL_CLIENT_SECRET: ${{ secrets.MAL_CLIENT_SECRET }}
+          ANILIST_CLIENT_ID: ${{ secrets.ANILIST_CLIENT_ID }}
+          ANILIST_CLIENT_SECRET: ${{ secrets.ANILIST_CLIENT_SECRET }}
+          SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
+          SIMKL_CLIENT_SECRET: ${{ secrets.SIMKL_CLIENT_SECRET }}
+          APP_CONFIG_URL: ${{ secrets.APP_CONFIG_URL }}
+          API_URL: ${{ secrets.API_URL }}
+          API_SECRET: ${{ secrets.API_SECRET }}
+          ERROR_REPORT_URL: ${{ secrets.ERROR_REPORT_URL }}
+        run: |
+          mkdir -p assets
+          {
+            echo "MAL_CLIENT_ID=$MAL_CLIENT_ID"
+            echo "MAL_CLIENT_SECRET=$MAL_CLIENT_SECRET"
+            echo "ANILIST_CLIENT_ID=$ANILIST_CLIENT_ID"
+            echo "ANILIST_CLIENT_SECRET=$ANILIST_CLIENT_SECRET"
+            echo "SIMKL_CLIENT_ID=$SIMKL_CLIENT_ID"
+            echo "SIMKL_CLIENT_SECRET=$SIMKL_CLIENT_SECRET"
+            echo "APP_CONFIG_URL=$APP_CONFIG_URL"
+            echo "BUILD_VARIANT=debug"
+            echo "API_URL=$API_URL"
+            echo "API_SECRET=$API_SECRET"
+            echo "ERROR_REPORT_URL=$ERROR_REPORT_URL"
+          } > assets/.env
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Generate localization files
+        run: bash tools/l10n/build.sh
+
+      - name: Build Debug APK
+        run: flutter build apk --debug
+
+      - name: Upload Debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
