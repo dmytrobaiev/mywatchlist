@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class AnimeVideos {
   final List<PromoVideo>? promo;
   final List<EpisodeVideo>? episodes;
@@ -10,15 +12,26 @@ class AnimeVideos {
   });
 
   factory AnimeVideos.fromJson(Map<String, dynamic> json) {
+    final rawPromo = json['promos'] ?? json['promo'];
+    final rawMusic = json['musicVideos'] ?? json['music_videos'];
     return AnimeVideos(
-      promo: json['promo'] != null
-          ? (json['promo'] as List).map((e) => PromoVideo.fromJson(e)).toList()
+      promo: rawPromo is List
+          ? rawPromo
+              .whereType<Map>()
+              .map((e) => PromoVideo.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
           : null,
-      episodes: json['episodes'] != null
-          ? (json['episodes'] as List).map((e) => EpisodeVideo.fromJson(e)).toList()
+      episodes: json['episodes'] is List
+          ? (json['episodes'] as List)
+              .whereType<Map>()
+              .map((e) => EpisodeVideo.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
           : null,
-      musicVideos: json['music_videos'] != null
-          ? (json['music_videos'] as List).map((e) => MusicVideo.fromJson(e)).toList()
+      musicVideos: rawMusic is List
+          ? rawMusic
+              .whereType<Map>()
+              .map((e) => MusicVideo.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
           : null,
     );
   }
@@ -34,9 +47,18 @@ class PromoVideo {
   });
 
   factory PromoVideo.fromJson(Map<String, dynamic> json) {
+    final nested = jikanMap(json['trailer']);
+    final Trailer? trailer = nested != null
+        ? Trailer.fromJson(nested)
+        : (json['videoUrl'] != null || json['imageUrl'] != null)
+            ? Trailer.fromFlat(
+                videoUrl: json['videoUrl'] as String?,
+                imageUrl: json['imageUrl'] as String?,
+              )
+            : null;
     return PromoVideo(
-      title: json['title'],
-      trailer: json['trailer'] != null ? Trailer.fromJson(json['trailer']) : null,
+      title: json['title'] as String?,
+      trailer: trailer,
     );
   }
 }
@@ -54,12 +76,35 @@ class Trailer {
     this.images,
   });
 
-  factory Trailer.fromJson(Map<String, dynamic> json) {
+  factory Trailer.fromFlat({String? videoUrl, String? imageUrl}) {
+    final ytId = jikanYoutubeId(videoUrl);
     return Trailer(
-      youtubeId: json['youtube_id'],
-      url: json['url'],
-      embedUrl: json['embed_url'],
-      images: json['images'] != null ? TrailerImages.fromJson(json['images']) : null,
+      youtubeId: ytId,
+      url: ytId != null ? 'https://www.youtube.com/watch?v=$ytId' : videoUrl,
+      embedUrl: videoUrl,
+      images: imageUrl != null
+          ? TrailerImages(
+              imageUrl: imageUrl,
+              smallImageUrl: imageUrl,
+              mediumImageUrl: imageUrl,
+              largeImageUrl: imageUrl,
+              maximumImageUrl: imageUrl,
+            )
+          : null,
+    );
+  }
+
+  factory Trailer.fromJson(Map<String, dynamic> json) {
+    final url = json['url'] as String?;
+    final embedUrl = (json['embedUrl'] ?? json['embed_url']) as String?;
+    return Trailer(
+      youtubeId: (json['youtubeId'] ?? json['youtube_id']) as String? ??
+          jikanYoutubeId(embedUrl ?? url),
+      url: url,
+      embedUrl: embedUrl,
+      images: jikanMap(json['images']) != null
+          ? TrailerImages.fromJson(jikanMap(json['images'])!)
+          : null,
     );
   }
 }
@@ -81,11 +126,11 @@ class TrailerImages {
 
   factory TrailerImages.fromJson(Map<String, dynamic> json) {
     return TrailerImages(
-      imageUrl: json['image_url'],
-      smallImageUrl: json['small_image_url'],
-      mediumImageUrl: json['medium_image_url'],
-      largeImageUrl: json['large_image_url'],
-      maximumImageUrl: json['maximum_image_url'],
+      imageUrl: (json['imageUrl'] ?? json['image_url']) as String?,
+      smallImageUrl: (json['smallImageUrl'] ?? json['small_image_url']) as String?,
+      mediumImageUrl: (json['mediumImageUrl'] ?? json['medium_image_url']) as String?,
+      largeImageUrl: (json['largeImageUrl'] ?? json['large_image_url']) as String?,
+      maximumImageUrl: (json['maximumImageUrl'] ?? json['maximum_image_url']) as String?,
     );
   }
 }
@@ -106,12 +151,16 @@ class EpisodeVideo {
   });
 
   factory EpisodeVideo.fromJson(Map<String, dynamic> json) {
+    final imgUrl = jikanStr(json['imageUrl'] ?? json['image_url']);
+    final rawEp = json['episode'];
     return EpisodeVideo(
-      malId: json['mal_id'],
-      url: json['url'],
-      title: json['title'],
-      episode: json['episode'],
-      images: json['images'] != null ? Images.fromJson(json['images']) : null,
+      malId: jikanInt(json['malId'] ?? json['mal_id'] ?? rawEp),
+      url: json['url'] as String?,
+      title: json['title'] as String?,
+      episode: rawEp == null ? null : (rawEp is int ? 'Episode $rawEp' : '$rawEp'),
+      images: (json['images'] != null || imgUrl != null)
+          ? Images.fromAny(json['images'], fallbackImageUrl: imgUrl)
+          : null,
     );
   }
 }
@@ -121,10 +170,16 @@ class Images {
 
   Images({this.jpg});
 
-  factory Images.fromJson(Map<String, dynamic> json) {
-    return Images(
-      jpg: json['jpg'] != null ? ImageFormat.fromJson(json['jpg']) : null,
-    );
+  factory Images.fromJson(Map<String, dynamic> json) => Images.fromAny(json);
+
+  factory Images.fromAny(Object? raw, {String? fallbackImageUrl}) {
+    final map = jikanMap(raw);
+    if (map != null && map['jpg'] != null) {
+      return Images(jpg: ImageFormat.fromJson(jikanMap(map['jpg'])!));
+    }
+    final sizes = jikanImageSizes(raw, fallbackImageUrl: fallbackImageUrl);
+    final url = sizes.medium ?? sizes.large ?? sizes.small;
+    return Images(jpg: url != null ? ImageFormat(imageUrl: url) : null);
   }
 }
 
@@ -135,7 +190,7 @@ class ImageFormat {
 
   factory ImageFormat.fromJson(Map<String, dynamic> json) {
     return ImageFormat(
-      imageUrl: json['image_url'],
+      imageUrl: jikanStr(json['image_url'] ?? json['imageUrl'] ?? json['medium']),
     );
   }
 }
@@ -152,10 +207,19 @@ class MusicVideo {
   });
 
   factory MusicVideo.fromJson(Map<String, dynamic> json) {
+    final nested = jikanMap(json['video']);
+    final Trailer? video = nested != null
+        ? Trailer.fromJson(nested)
+        : (json['videoUrl'] != null || json['imageUrl'] != null)
+            ? Trailer.fromFlat(
+                videoUrl: json['videoUrl'] as String?,
+                imageUrl: json['imageUrl'] as String?,
+              )
+            : null;
     return MusicVideo(
-      title: json['title'],
-      video: json['video'] != null ? Trailer.fromJson(json['video']) : null,
-      meta: json['meta'] != null ? Meta.fromJson(json['meta']) : null,
+      title: json['title'] as String?,
+      video: video,
+      meta: jikanMap(json['meta']) != null ? Meta.fromJson(jikanMap(json['meta'])!) : null,
     );
   }
 }
@@ -171,8 +235,8 @@ class Meta {
 
   factory Meta.fromJson(Map<String, dynamic> json) {
     return Meta(
-      title: json['title'],
-      author: json['author'],
+      title: json['title'] as String?,
+      author: json['author'] as String?,
     );
   }
 }

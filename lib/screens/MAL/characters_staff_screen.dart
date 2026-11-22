@@ -8,7 +8,9 @@ import 'package:mywatchlist/services/api/Jikan/jikan_anime_staff.dart'
 import 'package:mywatchlist/screens/MAL/character_screen.dart';
 import 'package:mywatchlist/screens/MAL/detail/sections/section_states.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_api.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_fallbacks.dart';
+import 'package:mywatchlist/services/api/jikan_source.dart';
 import 'package:mywatchlist/widgets/MAL/home/animecharacterwidget.dart';
 import 'package:mywatchlist/widgets/loading/shimmercolor.dart';
 
@@ -57,6 +59,11 @@ class _CharactersStaffScreenState extends State<CharactersStaffScreen> {
 
   Future<(List<AnimeCharacter>, List<staff_models.AnimeStaff>)>
       _fromJikan() async {
+    // Tenrai's character database is missing voice actors; skip it so MAL's
+    // own characters page wins instead of incomplete Tenrai data.
+    if (JikanClient.instance.source?.active == DataSource.tenrai) {
+      throw StateError('Skipping Tenrai for characters (incomplete voice actors)');
+    }
     final jikan = JikanApi();
     if (_isAnime) {
       final results = await Future.wait([
@@ -287,13 +294,10 @@ class _CharactersStaffScreenState extends State<CharactersStaffScreen> {
 
   Widget _buildCharacterTile(AnimeCharacter char) {
     final voiceActors = char.voiceActors ?? [];
-    final hasMultipleVAs = voiceActors.length > 1;
-    final hasSingleVA = voiceActors.length == 1;
-
-    if (hasMultipleVAs) {
+    if (voiceActors.isNotEmpty) {
       return _buildCharacterAccordionTile(char);
     }
-    return _buildCharacterSimpleTile(char, hasSingleVA);
+    return _buildCharacterSimpleTile(char, false);
   }
 
   Widget _buildCharacterSimpleTile(AnimeCharacter char, bool hasSingleVA) {

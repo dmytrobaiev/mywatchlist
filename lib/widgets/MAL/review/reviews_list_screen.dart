@@ -142,7 +142,12 @@ class _ReviewsListScreenState extends State<ReviewsListScreen> {
       return [
         SliverFillRemaining(
           hasScrollBody: false,
-          child: ReviewsEmptyState(filtered: hasContent, onClear: () => _setFilters(_filters.cleared())),
+          child: ReviewsEmptyState(
+            filtered: hasContent,
+            onClear: () => _setFilters(_filters.cleared()),
+            onLoadMore: hasContent && _feed.hasMore ? _feed.loadMore : null,
+            loadingMore: _feed.loading,
+          ),
         ),
       ];
     }

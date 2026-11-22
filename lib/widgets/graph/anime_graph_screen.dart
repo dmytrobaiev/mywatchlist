@@ -168,7 +168,7 @@ class _AnimeGraphScreenState extends State<AnimeGraphScreen>
       switch (relation) {
         GraphRelation.sequel => colors.success.color,
         GraphRelation.prequel => colors.danger.color,
-        _ => scheme.primary,
+        _ => scheme.onSurfaceVariant.withValues(alpha: 0.55),
       };
 
   /// Builds the graph and its view once; later frames reuse the same widget instance, so a
@@ -183,14 +183,15 @@ class _AnimeGraphScreenState extends State<AnimeGraphScreen>
         Node.Id(edge.target),
         paint: Paint()
           ..color = _edgeColor(edge.relation, scheme, colors)
-          ..strokeWidth = long ? 3 : 2
+          ..strokeWidth = long ? 3 : 1.75
           ..style = PaintingStyle.stroke,
       );
     }
     final algorithm = SugiyamaAlgorithm(SugiyamaConfiguration()
-      ..bendPointShape = CurvedBendPointShape(curveLength: 120)
-      ..nodeSeparation = 40
-      ..levelSeparation = 90);
+      ..bendPointShape = CurvedBendPointShape(curveLength: 28)
+      ..nodeSeparation = 64
+      ..levelSeparation = 140
+      ..coordinateAssignment = CoordinateAssignment.Average);
     _algorithm = algorithm;
     _builtForScheme = scheme;
     return GraphView(

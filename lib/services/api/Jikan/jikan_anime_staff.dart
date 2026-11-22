@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class AnimeStaff {
   final Person person;
   final List<String>? positions;
@@ -8,9 +10,20 @@ class AnimeStaff {
   });
 
   factory AnimeStaff.fromJson(Map<String, dynamic> json) {
+    final nestedPerson = jikanMap(json['person']);
+    List<String>? positions;
+    if (json['positions'] is List) {
+      positions = (json['positions'] as List).map((e) => '$e').toList();
+    } else if (json['role'] is String && (json['role'] as String).trim().isNotEmpty) {
+      positions = (json['role'] as String)
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
     return AnimeStaff(
-      person: Person.fromJson(json['person']),
-      positions: json['positions'] != null ? List<String>.from(json['positions']) : null,
+      person: Person.fromJson(nestedPerson ?? json),
+      positions: positions,
     );
   }
 }
@@ -29,11 +42,16 @@ class Person {
   });
 
   factory Person.fromJson(Map<String, dynamic> json) {
+    final id = jikanInt(json['malId'] ?? json['mal_id']);
+    final imgUrl = jikanStr(json['imageUrl'] ?? json['image_url']);
     return Person(
-      malId: json['mal_id'],
-      url: json['url'],
-      images: json['images'] != null ? Images.fromJson(json['images']) : null,
-      name: json['name'],
+      malId: id,
+      url: json['url'] as String? ??
+          (id != null ? 'https://myanimelist.net/people/$id' : null),
+      images: (json['images'] != null || imgUrl != null)
+          ? Images.fromAny(json['images'], fallbackImageUrl: imgUrl)
+          : null,
+      name: json['name'] as String?,
     );
   }
 }
@@ -43,10 +61,16 @@ class Images {
 
   Images({this.jpg});
 
-  factory Images.fromJson(Map<String, dynamic> json) {
-    return Images(
-      jpg: json['jpg'] != null ? ImageFormat.fromJson(json['jpg']) : null,
-    );
+  factory Images.fromJson(Map<String, dynamic> json) => Images.fromAny(json);
+
+  factory Images.fromAny(Object? raw, {String? fallbackImageUrl}) {
+    final map = jikanMap(raw);
+    if (map != null && map['jpg'] != null) {
+      return Images(jpg: ImageFormat.fromJson(jikanMap(map['jpg'])!));
+    }
+    final sizes = jikanImageSizes(raw, fallbackImageUrl: fallbackImageUrl);
+    final url = sizes.medium ?? sizes.large ?? sizes.small;
+    return Images(jpg: url != null ? ImageFormat(imageUrl: url) : null);
   }
 }
 
@@ -57,7 +81,7 @@ class ImageFormat {
 
   factory ImageFormat.fromJson(Map<String, dynamic> json) {
     return ImageFormat(
-      imageUrl: json['image_url'],
+      imageUrl: jikanStr(json['image_url'] ?? json['imageUrl'] ?? json['medium']),
     );
   }
 }

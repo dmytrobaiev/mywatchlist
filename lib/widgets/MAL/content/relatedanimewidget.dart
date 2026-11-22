@@ -76,10 +76,33 @@ class _RelatedAnimeWidgetState extends State<RelatedAnimeWidget>
               items: group.nodes,
               tileWidth: cardWidth,
               tileHeight: cardHeight,
+              onViewAll: () => _openGrid(context),
             ),
           ],
         );
       },
+    );
+  }
+
+  void _openGrid(BuildContext context) {
+    final hasGraph = widget.category == 'anime' || widget.category == 'manga';
+    AppRoutes.push(
+      context,
+      RelatedGridScreen(
+        category: widget.category,
+        groups: _groups,
+        onOpenGraph: hasGraph
+            ? () => AppRoutes.push(
+                  context,
+                  AnimeGraphScreen(
+                    id: widget.id,
+                    title: widget.title,
+                    category: widget.category,
+                    fallbackStatuses: statusesOf(allRelatedNodes(_groups)),
+                  ),
+                )
+            : null,
+      ),
     );
   }
 

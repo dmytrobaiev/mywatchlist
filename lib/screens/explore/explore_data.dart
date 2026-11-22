@@ -17,6 +17,8 @@ import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/screens/search/data/anime_genres.dart' as anime_genres;
 import 'package:mywatchlist/screens/search/data/manga_genres.dart' as manga_genres;
 import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/services/api/MAL/mal_api.dart';
 import 'package:mywatchlist/services/api/mwl_api.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
@@ -91,20 +93,41 @@ class CommunityRecommendation {
       : 'https://myanimelist.net/dbchanges.php?go=report${category == 'manga' ? 'manga' : 'anime'}'
           'recommendation&id=$id';
 
-  /// From one element of Jikan's `recommendations/{anime|manga}` list; null when malformed.
+  /// From one element of Jikan (`jikan-edge` or Jikan v4 / Tenrai) `recommendations/{anime|manga}` list; null when malformed.
   static CommunityRecommendation? fromJikan(Object? json) {
     if (json is! Map) return null;
     final entry = json['entry'];
-    if (entry is! List || entry.length < 2) return null;
-    final first = _ref(entry[0]);
-    final second = _ref(entry[1]);
-    if (first == null || second == null) return null;
-    final user = json['user'];
+    if (entry is List && entry.length >= 2) {
+      final first = _ref(entry[0]);
+      final second = _ref(entry[1]);
+      if (first == null || second == null) return null;
+      final user = json['user'];
+      final text = json['content'];
+      return CommunityRecommendation(
+        first: first,
+        second: second,
+        username: user is Map && user['username'] is String ? user['username'] as String : null,
+        text: text is String && text.trim().isNotEmpty ? text.trim() : null,
+        date: json['date'] is String ? json['date'] as String : null,
+      );
+    }
+    // jikan-edge flat shape: {malId, title, imageUrl, recommendedMalId, recommendedTitle, recommendedImageUrl, content, username}
+    final firstId = jikanInt(json['malId']);
+    final secondId = jikanInt(json['recommendedMalId']);
+    if (firstId == null || secondId == null) return null;
     final text = json['content'];
     return CommunityRecommendation(
-      first: first,
-      second: second,
-      username: user is Map && user['username'] is String ? user['username'] as String : null,
+      first: RecoRef(
+        id: firstId,
+        title: (json['title'] as String?) ?? '',
+        imageUrl: jikanStr(json['imageUrl']),
+      ),
+      second: RecoRef(
+        id: secondId,
+        title: (json['recommendedTitle'] as String?) ?? '',
+        imageUrl: jikanStr(json['recommendedImageUrl']),
+      ),
+      username: json['username'] is String ? json['username'] as String : null,
       text: text is String && text.trim().isNotEmpty ? text.trim() : null,
       date: json['date'] is String ? json['date'] as String : null,
     );
@@ -128,17 +151,13 @@ class CommunityRecommendation {
   }
 
   static RecoRef? _ref(Object? json) {
-    if (json is! Map || json['mal_id'] is! int) return null;
-    final images = json['images'];
-    final jpg = images is Map ? images['jpg'] : null;
-    String? image;
-    if (jpg is Map) {
-      image = (jpg['image_url'] ?? jpg['large_image_url']) as String?;
-    }
+    final map = jikanMap(json);
+    final id = map != null ? jikanInt(map['malId'] ?? map['mal_id']) : null;
+    if (map == null || id == null) return null;
     return RecoRef(
-      id: json['mal_id'] as int,
-      title: (json['title'] as String?) ?? '',
-      imageUrl: image,
+      id: id,
+      title: (map['title'] as String?) ?? '',
+      imageUrl: jikanBestImage(map),
     );
   }
 }
@@ -478,13 +497,19 @@ class ExploreData {
   static Future<int?> _randomFromJikan(String category) async {
     try {
       final sfw = !Preferences.general.nsfw;
-      final url = Uri.parse('${Constants.jikanV4}/random/$category?sfw=$sfw');
-      final response = await JikanClient.instance.get(url, useCache: false);
-      if (response.statusCode != 200) return null;
-      final body = await MwlApi.decodeJson(response.body);
-      final data = body is Map ? body['data'] : null;
-      final id = data is Map ? data['mal_id'] : null;
-      return id is int ? id : null;
+      final url = Uri.parse('${Constants.jikanV4}/random/$category');
+      for (var attempt = 0; attempt < 3; attempt++) {
+        final response = await JikanClient.instance.get(url, useCache: false);
+        if (response.statusCode != 200) return null;
+        final body = await MwlApi.decodeJson(response.body);
+        final data = jikanMap(body is Map ? body['data'] : null);
+        if (data == null) return null;
+        if (sfw && Anime.nsfwFromJikanRating(data['rating'] as String?) == 'black') {
+          continue;
+        }
+        return jikanInt(data['malId'] ?? data['mal_id']);
+      }
+      return null;
     } catch (e) {
       debugPrint('ExploreData.randomId (Jikan): $e');
       return null;

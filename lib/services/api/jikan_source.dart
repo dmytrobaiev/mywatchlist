@@ -72,9 +72,10 @@ class JikanSource extends ChangeNotifier {
   /// The selector used by the app's [JikanClient.instance].
   static JikanSource instance = JikanSource();
 
-  /// Jikan's base URL (no trailing slash).
-  static const String jikanBase = 'https://api.jikan.moe/v4';
-  static const String jikanHost = 'api.jikan.moe';
+  /// Jikan (`jikan-edge`) base URL (no trailing slash).
+  static const String jikanBase = 'https://jikan.lucashdo.com/v1';
+  static const String jikanHost = 'jikan.lucashdo.com';
+  static const String legacyJikanHost = 'api.jikan.moe';
 
   /// Tenrai's base URL (no trailing slash).
   static const String tenraiBase = TenraiClient.baseUrl;
@@ -263,7 +264,9 @@ class JikanSource extends ChangeNotifier {
           ? tenraiBase
           : jikanBase;
 
-  bool isJikan(Uri url) => url.host == jikanHost && url.path.startsWith('/v4');
+  bool isJikan(Uri url) =>
+      (url.host == jikanHost && url.path.startsWith('/v1')) ||
+      (url.host == legacyJikanHost && url.path.startsWith('/v4'));
 
   /// Whether Tenrai has the endpoint of the Jikan URL [url].
   bool tenraiServes(Uri url) {
@@ -289,7 +292,12 @@ class JikanSource extends ChangeNotifier {
   }
 
   static String _jikanPath(Uri url) {
-    var path = url.path.substring('/v4'.length);
+    var path = url.path;
+    if (path.startsWith('/v1')) {
+      path = path.substring('/v1'.length);
+    } else if (path.startsWith('/v4')) {
+      path = path.substring('/v4'.length);
+    }
     if (path.length > 1 && path.endsWith('/')) path = path.substring(0, path.length - 1);
     return path.isEmpty ? '/' : path;
   }

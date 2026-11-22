@@ -21,11 +21,13 @@ import 'package:scroll_to_index/scroll_to_index.dart';
 class ShowAnimeReviews extends StatefulWidget {
   final int animeId;
   final String category;
+  final VoidCallback? onViewAll;
 
   const ShowAnimeReviews({
     super.key,
     required this.animeId,
     this.category = 'anime',
+    this.onViewAll,
   });
 
   @override
@@ -35,6 +37,7 @@ class ShowAnimeReviews extends StatefulWidget {
 class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepAliveClientMixin {
   static const _cardWidth = 320.0;
   static const _listHeight = 385.0;
+  static const _previewLimit = 15;
   static const _loadMoreDistance = 240.0;
 
   @override
@@ -70,6 +73,7 @@ class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepA
   void _onFeed() => setState(() => _visible = _filtered());
 
   void _onScroll() {
+    if (widget.onViewAll != null) return;
     if (!_scroll.hasClients || _feed.loading || !_feed.hasMore) return;
     final position = _scroll.position;
     if (position.pixels >= position.maxScrollExtent - _loadMoreDistance) _feed.loadMore();
@@ -138,22 +142,32 @@ class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepA
   }
 
   Widget _buildReviewList() {
-    final showLoader = _feed.hasMore && _feed.loading;
+    final hasViewAll = widget.onViewAll != null;
+    final preview = hasViewAll && _visible.length > _previewLimit
+        ? _visible.take(_previewLimit).toList()
+        : _visible;
+    final showLoader = !hasViewAll && _feed.hasMore && _feed.loading;
     return ListView.builder(
       controller: _scroll,
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 13),
       itemExtent: _cardWidth,
-      itemCount: _visible.length + (showLoader ? 1 : 0),
+      itemCount: preview.length + (hasViewAll ? 1 : (showLoader ? 1 : 0)),
       itemBuilder: (context, index) {
-        if (index == _visible.length) return const ReviewLoadingCard();
+        if (hasViewAll && index == preview.length) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 17),
+            child: HorizontalViewAllCard(onPressed: widget.onViewAll!),
+          );
+        }
+        if (index == preview.length) return const ReviewLoadingCard();
         return AutoScrollTag(
           key: ValueKey(index),
           controller: _scroll,
           index: index,
           child: Padding(
             padding: const EdgeInsets.only(bottom: 17),
-            child: ReviewItem(review: _visible[index], onTap: () => _showReview(index)),
+            child: ReviewItem(review: preview[index], onTap: () => _showReview(index)),
           ),
         );
       },
@@ -178,6 +192,8 @@ class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepA
     return ReviewsEmptyState(
       filtered: filtered,
       onClear: () => _setFilters(_filters.cleared()),
+      onLoadMore: filtered && _feed.hasMore ? _feed.loadMore : null,
+      loadingMore: _feed.loading,
     );
   }
 }
@@ -210,12 +226,20 @@ void showReviewPager(
   ).whenComplete(controller.dispose);
 }
 
-/// No review at all, or none left by the filters (with a button clearing them).
+/// No review at all, or none left by the filters (with buttons to clear or load more).
 class ReviewsEmptyState extends StatelessWidget {
   final bool filtered;
   final VoidCallback onClear;
+  final VoidCallback? onLoadMore;
+  final bool loadingMore;
 
-  const ReviewsEmptyState({super.key, required this.filtered, required this.onClear});
+  const ReviewsEmptyState({
+    super.key,
+    required this.filtered,
+    required this.onClear,
+    this.onLoadMore,
+    this.loadingMore = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -234,7 +258,19 @@ class ReviewsEmptyState extends StatelessWidget {
           ),
           if (filtered) ...[
             const SizedBox(height: 8),
-            TextButton(onPressed: onClear, child: Text(S.current.Social_Reviews_Clear_Filter)),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              alignment: WrapAlignment.center,
+              children: [
+                if (onLoadMore != null)
+                  FilledButton.tonal(
+                    onPressed: loadingMore ? null : onLoadMore,
+                    child: Text(loadingMore ? S.current.Loading : S.current.Load_More),
+                  ),
+                TextButton(onPressed: onClear, child: Text(S.current.Social_Reviews_Clear_Filter)),
+              ],
+            ),
           ],
         ],
       ),

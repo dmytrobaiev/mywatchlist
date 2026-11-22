@@ -114,16 +114,23 @@ class ListStats {
   factory ListStats.fromJikan(Map<String, dynamic>? json, {required bool manga}) {
     if (json == null) return const ListStats();
     return ListStats(
-      meanScore: (json['mean_score'] as num?)?.toDouble(),
-      totalEntries: _int(json['total_entries']),
-      days: (json[manga ? 'days_read' : 'days_watched'] as num?)?.toDouble(),
-      progress: _int(json[manga ? 'chapters_read' : 'episodes_watched']),
-      volumes: manga ? _int(json['volumes_read']) : 0,
+      meanScore: ((json['meanScore'] ?? json['mean_score']) as num?)?.toDouble(),
+      totalEntries: _int(json['totalEntries'] ?? json['total_entries']),
+      days: ((manga
+              ? (json['daysRead'] ?? json['days_read'])
+              : (json['daysWatched'] ?? json['days_watched'])) as num?)
+          ?.toDouble(),
+      progress: _int(manga
+          ? (json['chaptersRead'] ?? json['chapters_read'])
+          : (json['episodesWatched'] ?? json['episodes_watched'])),
+      volumes: manga ? _int(json['volumesRead'] ?? json['volumes_read']) : 0,
       current: _int(json[manga ? 'reading' : 'watching']),
       completed: _int(json['completed']),
-      onHold: _int(json['on_hold']),
+      onHold: _int(json['onHold'] ?? json['on_hold']),
       dropped: _int(json['dropped']),
-      planned: _int(json[manga ? 'plan_to_read' : 'plan_to_watch']),
+      planned: _int(manga
+          ? (json['planToRead'] ?? json['plan_to_read'])
+          : (json['planToWatch'] ?? json['plan_to_watch'])),
     );
   }
 

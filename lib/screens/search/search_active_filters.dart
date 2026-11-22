@@ -75,6 +75,14 @@ class _ActiveFilters extends StatelessWidget {
         keys: [FilterKey.orderBy, FilterKey.sort]);
     if (f.integer(FilterKey.score) != null) add(FilterKey.score, '${f.integer(FilterKey.score)}+');
     add(FilterKey.letter, f.text(FilterKey.letter));
+    final seasonName = f.text(FilterKey.season);
+    final seasonYear = f.integer(FilterKey.year);
+    if (seasonName != null && seasonYear != null) {
+      final cap = seasonName.isEmpty
+          ? ''
+          : '${seasonName[0].toUpperCase()}${seasonName.substring(1)}';
+      add(FilterKey.season, '$cap $seasonYear', keys: [FilterKey.season, FilterKey.year]);
+    }
     add(FilterKey.startDate, f.text(FilterKey.startDate) == null ? null : '≥ ${f.text(FilterKey.startDate)}');
     add(FilterKey.endDate, f.text(FilterKey.endDate) == null ? null : '≤ ${f.text(FilterKey.endDate)}');
     final producer = f.integer(FilterKey.producer);

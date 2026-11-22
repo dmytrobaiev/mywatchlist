@@ -13,6 +13,8 @@ class EntryPatch {
   final int? priority;
   final String? startDate;
   final String? finishDate;
+  final bool clearStartDate;
+  final bool clearFinishDate;
   final String? tags;
   final String? comments;
 
@@ -27,6 +29,8 @@ class EntryPatch {
     this.priority,
     this.startDate,
     this.finishDate,
+    this.clearStartDate = false,
+    this.clearFinishDate = false,
     this.tags,
     this.comments,
   });

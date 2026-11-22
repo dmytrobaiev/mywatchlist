@@ -171,78 +171,76 @@ class _PostWidgetState extends State<PostWidget>
     _parseContent();
   }
 
+  static final RegExp _quoteTagRe = RegExp(
+    r'\[quote(?:=([^\]]*))?\]|\[/quote\]',
+    caseSensitive: false,
+  );
+  static final RegExp _quoteMessageRe = RegExp(r'\bmessage=(\d+)', caseSensitive: false);
+
   void _parseContent() {
-    // Convert BBCode brackets
-    if (signature != null) {
-      signature = signature!
-          .replaceAll("[", "<")
-          .replaceAll("]", ">")
-          .replaceAll("[\'", "<\'");
-    }
-
-    body = body
-        .replaceAll("[", "<")
-        .replaceAll("]", ">")
-        .replaceAll("[\'", "<\'");
-
-    // Extract quotes
+    // Parse [quote=...]...[/quote] directly on raw BBCode without mangling plain brackets.
     try {
-      if (body.contains("<quote")) {
-        var quote = body.substring(0, body.lastIndexOf("</quote>") + 8);
-        int index = 0;
-        var quoteIndexList = <int>[];
-        while (index < (quote.length - 7)) {
-          var oq = quote.substring(index, index + 6);
-          var cq = quote.substring(index, index + 8);
-          if (oq == "<quote") {
-            quoteIndexList.add(index);
-          }
-          if (cq == "</quote>") {
-            int startIndex = quoteIndexList.removeLast();
-            var quoteBody = quote.substring(startIndex, index);
-            int quoteIndex = quoteBody.lastIndexOf("</quote>");
-            if (quoteIndex == -1) {
-              quoteIndex = quoteBody.lastIndexOf("message=") + 17;
-            } else {
-              quoteIndex += 8;
-            }
-
-            var qid = int.tryParse(quoteBody.substring(
-                quoteBody.indexOf("message=") + 8,
-                quoteBody.indexOf("message=") + 16));
-            ForumTopicPost? quotePost;
-            widget.getForumPostFromPostId(qid, (post) {
-              quotePost = post;
-            });
-            String? forumUsername;
-            if (quoteBody.indexOf("<quote=") != -1 &&
-                quoteBody.indexOf("message=") != -1) {
-              forumUsername = quoteBody.substring(
-                  quoteBody.indexOf("<quote=") + 7,
-                  quoteBody.indexOf("message="));
-            }
-            if (quotePost == null && qid != null && forumUsername != null) {
-              quotePost = ForumTopicPost(
-                  id: qid, createdBy: ForumUser(name: forumUsername));
-            }
-            if (forumUsername != null) {
-              quotedPostList.add(quotePost!);
-              quoteBodyList.add(
-                  quoteBody.substring(quoteIndex).replaceAll("<br />", ""));
-              var qq = quote.substring(startIndex, index);
-              if (quoteIndexList.isEmpty) {
-                body = body.replaceAll(qq, "");
+      final matches = _quoteTagRe.allMatches(body).toList();
+      if (matches.isNotEmpty) {
+        final stack = <RegExpMatch>[];
+        final topRanges = <(int, int)>[];
+        for (final m in matches) {
+          final token = m.group(0)!.toLowerCase();
+          if (token.startsWith('[/quote')) {
+            if (stack.isEmpty) continue;
+            final open = stack.removeLast();
+            final attr = open.group(1)?.trim();
+            final inner = body.substring(open.end, m.start);
+            // Strip any nested [quote]...[/quote] blocks from the extracted snippet.
+            final strippedInner = inner
+                .replaceAll(RegExp(r'\[quote[^\]]*\][\s\S]*?\[/quote\]', caseSensitive: false), '')
+                .replaceAll(RegExp(r'^(?:\s*<br\s*/?>\s*)+|(?:\s*<br\s*/?>\s*)+$', caseSensitive: false), '')
+                .trim();
+            if (attr != null && attr.isNotEmpty) {
+              final msgMatch = _quoteMessageRe.firstMatch(attr);
+              final qid = msgMatch != null ? int.tryParse(msgMatch.group(1)!) : null;
+              final username = attr.replaceAll(_quoteMessageRe, '').trim();
+              ForumTopicPost? quotePost;
+              if (qid != null) {
+                widget.getForumPostFromPostId(qid, (post) {
+                  quotePost = post;
+                });
+              }
+              if (quotePost == null && username.isNotEmpty) {
+                quotePost = ForumTopicPost(
+                  id: qid ?? 0,
+                  createdBy: ForumUser(name: username),
+                );
+              }
+              if (quotePost != null && username.isNotEmpty) {
+                quotedPostList.add(quotePost!);
+                quoteBodyList.add(strippedInner);
+                if (stack.isEmpty) {
+                  topRanges.add((open.start, m.end));
+                }
               }
             }
+          } else {
+            stack.add(m);
           }
-          index++;
+        }
+        if (topRanges.isNotEmpty) {
+          final buf = StringBuffer();
+          var cursor = 0;
+          for (final (start, end) in topRanges) {
+            if (start > cursor) buf.write(body.substring(cursor, start));
+            cursor = end;
+          }
+          if (cursor < body.length) buf.write(body.substring(cursor));
+          body = buf
+              .toString()
+              .replaceFirst(RegExp(r'^(?:\s*<br\s*/?>\s*)+', caseSensitive: false), '')
+              .trim();
         }
       }
     } catch (e) {
       debugPrint('Quote parsing error: $e');
     }
-
-    body = "<div> $body </div>";
   }
 
   @override
@@ -253,6 +251,9 @@ class _PostWidgetState extends State<PostWidget>
       type: widget.isSelected ? MaterialType.canvas : MaterialType.transparency,
       color: widget.isSelected ? scheme.primaryContainer.withValues(alpha: 0.35) : null,
       child: InkWell(
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
         onTap: widget.isSelected
             ? () => widget.onUnSelected(widget.post)
             : widget.isShareStarted

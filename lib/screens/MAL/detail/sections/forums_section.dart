@@ -10,26 +10,33 @@ import 'package:mywatchlist/services/api/MAL/scrapper/title_clubs.dart';
 import 'package:mywatchlist/widgets/MAL/content/show_forum.dart';
 import 'package:mywatchlist/widgets/common/app_image.dart';
 
-/// Latest forum topics, then the clubs of the title; the arrow opens the full topic list.
+/// Latest forum topics, then the clubs of the title; the arrow and trailing card open the full topic list.
 DetailSection? forumsSection(DetailData data) {
   if (!data.hasContent) return null;
+  void openAll(BuildContext context) => gotoPage(
+        context: context,
+        newPage: ForumTopicsScreen(
+          animeId: data.isAnime ? data.id : null,
+          mangaId: data.isManga ? data.id : null,
+          title: S.current.Forums,
+        ),
+      );
   return DetailSection(
     TabType.Forums,
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ShowAnimeForum(animeId: data.id, category: data.category),
-        TitleClubsRow(id: data.id, category: data.category),
-      ],
-    ),
-    onViewAll: (context) => gotoPage(
-      context: context,
-      newPage: ForumTopicsScreen(
-        animeId: data.isAnime ? data.id : null,
-        mangaId: data.isManga ? data.id : null,
-        title: S.current.Forums,
+    Builder(
+      builder: (context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ShowAnimeForum(
+            animeId: data.id,
+            category: data.category,
+            onViewAll: () => openAll(context),
+          ),
+          TitleClubsRow(id: data.id, category: data.category),
+        ],
       ),
     ),
+    onViewAll: openAll,
   );
 }
 

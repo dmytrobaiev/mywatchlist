@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mywatchlist/cache/bookmarks.dart';
@@ -12,6 +13,7 @@ import 'package:mywatchlist/screens/MAL/contentdetailedscreen.dart';
 import 'package:mywatchlist/screens/MAL/detail/sections/section_states.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_fallbacks.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/character_page.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/utils/web_launcher.dart';
@@ -88,32 +90,63 @@ class _Profile {
 Map<String, dynamic>? _map(Object? v) =>
     v is Map ? v.cast<String, dynamic>() : null;
 
-String? _jpg(Object? images) {
-  final url = _map(_map(images)?['jpg'])?['image_url'];
-  return url is String && url.isNotEmpty ? url : null;
+String? _jpg(Object? images, {String? fallbackImageUrl}) {
+  final sizes = jikanImageSizes(images, fallbackImageUrl: fallbackImageUrl);
+  final url = sizes.large ?? sizes.medium ?? sizes.small;
+  return url != null && !RoundAvatar.isPlaceholderUrl(url) ? url : null;
 }
 
-/// Entries of a Jikan relation list, one per MAL id (first one wins).
+/// Entries of a Jikan (`jikan-edge` or Jikan v4 / Tenrai / MalCharacterPage) relation list,
+/// one per MAL id (first one wins).
 List<_Entry> _entries(
   Object? list, {
   required String key,
   required String titleKey,
   required String subtitleKey,
+  String? flatIdKey,
+  String? flatTitleKey,
+  String? flatImageKey,
+  String? flatSubtitleKey,
 }) {
   if (list is! List) return const [];
   final seen = <int>{};
   final out = <_Entry>[];
   for (final raw in list) {
     final row = _map(raw);
-    final item = _map(row?[key]);
-    final id = item?['mal_id'];
-    if (row == null || item == null || id is! int || !seen.add(id)) continue;
-    final title = item[titleKey];
-    final subtitle = row[subtitleKey];
+    if (row == null) continue;
+    final nested = _map(row[key]);
+    final int? id;
+    final Object? title;
+    final String? image;
+    Object? subtitle;
+    if (nested != null) {
+      id = jikanInt(nested['malId'] ?? nested['mal_id']);
+      title = nested[titleKey];
+      image = _jpg(nested['images'], fallbackImageUrl: jikanStr(nested['imageUrl'] ?? nested['image_url']));
+      subtitle = row[subtitleKey];
+    } else {
+      id = jikanInt(
+        (flatIdKey != null ? row[flatIdKey] : null) ?? row['malId'] ?? row['mal_id'],
+      );
+      title = (flatTitleKey != null ? row[flatTitleKey] : null) ?? row[titleKey];
+      image = _jpg(
+        row['images'],
+        fallbackImageUrl: jikanStr(
+          (flatImageKey != null ? row[flatImageKey] : null) ??
+              row['imageUrl'] ??
+              row['image_url'],
+        ),
+      );
+      subtitle = (flatSubtitleKey != null ? row[flatSubtitleKey] : null) ?? row[subtitleKey];
+      if (subtitle is List) {
+        subtitle = subtitle.map((e) => '$e').where((e) => e.isNotEmpty).join(', ');
+      }
+    }
+    if (id == null || !seen.add(id)) continue;
     out.add(_Entry(
       id,
       title is String && title.isNotEmpty ? title : '?',
-      _jpg(item['images']),
+      image,
       subtitle is String && subtitle.isNotEmpty ? subtitle : null,
     ));
   }
@@ -134,10 +167,10 @@ _Profile _profileFromData(Map<String, dynamic> data, bool isCharacter) {
   final name = (data['name'] as String?) ?? '';
   String alternate;
   if (isCharacter) {
-    alternate = (data['name_kanji'] as String?) ?? '';
+    alternate = ((data['nameKanji'] ?? data['name_kanji']) as String?) ?? '';
   } else {
-    final given = (data['given_name'] as String?) ?? '';
-    final family = (data['family_name'] as String?) ?? '';
+    final given = ((data['givenName'] ?? data['given_name']) as String?) ?? '';
+    final family = ((data['familyName'] ?? data['family_name']) as String?) ?? '';
     alternate = [given, family].where((e) => e.isNotEmpty).join(', ');
   }
   final sections = isCharacter
@@ -165,37 +198,63 @@ _Profile _profileFromData(Map<String, dynamic> data, bool isCharacter) {
           _Section(
             _SectionId.voiceRoles,
             'character',
-            _entries(data['voices'],
-                key: 'character', titleKey: 'name', subtitleKey: 'role'),
+            _entries(
+              data['voices'],
+              key: 'character',
+              titleKey: 'name',
+              subtitleKey: 'role',
+              flatIdKey: 'characterId',
+              flatTitleKey: 'characterName',
+              flatImageKey: 'characterImageUrl',
+              flatSubtitleKey: 'characterRole',
+            ),
           ),
           _Section(
             _SectionId.animeStaff,
             'anime',
-            _entries(data['anime'],
-                key: 'anime', titleKey: 'title', subtitleKey: 'position'),
+            _entries(
+              data['anime'],
+              key: 'anime',
+              titleKey: 'title',
+              subtitleKey: 'position',
+              flatIdKey: 'animeId',
+              flatTitleKey: 'animeTitle',
+              flatSubtitleKey: 'positions',
+            ),
           ),
           _Section(
             _SectionId.publishedManga,
             'manga',
-            _entries(data['manga'],
-                key: 'manga', titleKey: 'title', subtitleKey: 'position'),
+            _entries(
+              data['manga'],
+              key: 'manga',
+              titleKey: 'title',
+              subtitleKey: 'position',
+              flatIdKey: 'mangaId',
+              flatTitleKey: 'mangaTitle',
+              flatSubtitleKey: 'positions',
+            ),
           ),
         ];
   final roleFavorites = <int, int>{};
   if (!isCharacter && data['voices'] is List) {
     for (final raw in data['voices'] as List) {
       final row = _map(raw);
-      final id = _map(row?['character'])?['mal_id'];
-      final fav = row?['favorites'];
-      if (id is int && fav is int) roleFavorites.putIfAbsent(id, () => fav);
+      final id = jikanInt(
+        _map(row?['character'])?['malId'] ??
+            _map(row?['character'])?['mal_id'] ??
+            row?['characterId'],
+      );
+      final fav = jikanInt(row?['favorites']);
+      if (id != null && fav != null) roleFavorites.putIfAbsent(id, () => fav);
     }
   }
   return _Profile(
     name: name,
     alternateName: alternate,
     about: ((data['about'] as String?) ?? '').trim(),
-    favorites: data['favorites'] as int?,
-    image: _jpg(data['images']),
+    favorites: jikanInt(data['favorites']),
+    image: _jpg(data['images'], fallbackImageUrl: jikanStr(data['imageUrl'] ?? data['image_url'])),
     sections: sections,
     roleFavorites: roleFavorites,
   );
@@ -206,7 +265,9 @@ List<String> _parsePictures(String body) {
   if (data is! List) return const [];
   return [
     for (final e in data)
-      if (_jpg(e) case final String url) url,
+      if (_jpg(e, fallbackImageUrl: jikanStr(_map(e)?['imageUrl'] ?? _map(e)?['image_url']))
+          case final String url)
+        url,
   ];
 }
 
@@ -247,6 +308,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
   List<_Entry> _voices = const [];
   final ValueNotifier<List<String>> _pictures = ValueNotifier(const []);
   final ValueNotifier<(int, int)?> _sortProgress = ValueNotifier(null);
+  final ScrollController _scroll = ScrollController();
+  final ValueNotifier<bool> _showBarTitle = ValueNotifier(false);
+  final GlobalKey _headerNameKey = GlobalKey();
 
   /// Incremented to cancel a running favorites lookup.
   int _run = 0;
@@ -259,15 +323,35 @@ class _CharacterScreenState extends State<CharacterScreen> {
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     _load();
   }
 
   @override
   void dispose() {
     _run++;
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
+    _showBarTitle.dispose();
     _pictures.dispose();
     _sortProgress.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    final ctx = _headerNameKey.currentContext;
+    if (ctx == null) {
+      if (_showBarTitle.value) _showBarTitle.value = false;
+      return;
+    }
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return;
+    final bottomY = box.localToGlobal(Offset(0, box.size.height)).dy;
+    final barBottom = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final shouldShow = bottomY <= barBottom;
+    if (_showBarTitle.value != shouldShow) {
+      _showBarTitle.value = shouldShow;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -462,10 +546,19 @@ class _CharacterScreenState extends State<CharacterScreen> {
         : (_isCharacter ? S.current.Fch_Character : S.current.Fch_Person);
     return Scaffold(
       body: CustomScrollView(
+        controller: _scroll,
         slivers: [
           SliverAppBar(
             pinned: true,
-            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            title: ValueListenableBuilder<bool>(
+              valueListenable: _showBarTitle,
+              builder: (context, show, child) => AnimatedOpacity(
+                opacity: (profile == null || show) ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 180),
+                child: child,
+              ),
+              child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
             actions: [
               if (profile != null && profile.name.isNotEmpty)
                 BookmarkButton(
@@ -509,7 +602,11 @@ class _CharacterScreenState extends State<CharacterScreen> {
     if (profile == null) return [const SliverToBoxAdapter(child: _Skeleton())];
     return [
       SliverToBoxAdapter(
-        child: _Header(profile: profile, pictures: _pictures),
+        child: _Header(
+          profile: profile,
+          pictures: _pictures,
+          nameKey: _headerNameKey,
+        ),
       ),
       SliverToBoxAdapter(
         child: Padding(
@@ -531,6 +628,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   List<Widget> _aboutSlivers(_Profile profile) {
     final style = Theme.of(context).textTheme.bodyLarge;
+    final encodedForTranslation = profile.about
+        .replaceAll(RegExp(r'\[Spoiler\]', caseSensitive: false), '<<<S>>>')
+        .replaceAll(RegExp(r'\[/Spoiler\]', caseSensitive: false), '<<<E>>>');
     return [
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -543,9 +643,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
                   ),
                 )
               : TranslatorWidget(
-                  content: profile.about,
+                  content: encodedForTranslation,
                   reversed: true,
-                  builder: (context, text) => SelectableText(text, style: style),
+                  builder: (context, text) => _AboutContent(text: text, style: style),
                 ),
         ),
       ),
@@ -692,8 +792,9 @@ class _Skeleton extends StatelessWidget {
 class _Header extends StatelessWidget {
   final _Profile profile;
   final ValueNotifier<List<String>> pictures;
+  final GlobalKey? nameKey;
 
-  const _Header({required this.profile, required this.pictures});
+  const _Header({required this.profile, required this.pictures, this.nameKey});
 
   @override
   Widget build(BuildContext context) {
@@ -708,6 +809,7 @@ class _Header extends StatelessWidget {
             children: [
               Text(
                 profile.name,
+                key: nameKey,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall,
               ),
@@ -793,7 +895,27 @@ class _GalleryState extends State<_Gallery> {
     return ValueListenableBuilder<List<String>>(
       valueListenable: widget.pictures,
       builder: (context, pictures, _) {
-        if (pictures.isEmpty) return const SizedBox(height: 16);
+        if (pictures.isEmpty) {
+          return SizedBox(
+            height: 220,
+            child: Center(
+              child: ClipOval(
+                child: SizedBox(
+                  width: 196,
+                  height: 196,
+                  child: ColoredBox(
+                    color: scheme.secondaryContainer,
+                    child: Icon(
+                      Icons.person,
+                      size: 64,
+                      color: scheme.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
         return GestureDetector(
           onTap: () => zoomInImageList(context, pictures, _index),
           child: SizedBox(
@@ -1010,6 +1132,199 @@ class _EntryCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+final RegExp _aboutSpoilerRe = RegExp(
+  r'(?:\[Spoiler\]|<<<S>>>)\s*([\s\S]*?)\s*(?:\[/Spoiler\]|<<<E>>>)',
+  caseSensitive: false,
+);
+
+/// Renders character/person About text with collapsible `[Spoiler]...[/Spoiler]` blocks
+/// (no icons) and linkified URLs / social handles.
+class _AboutContent extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _AboutContent({required this.text, this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    final segments = <({bool spoiler, String body})>[];
+    var cursor = 0;
+    for (final match in _aboutSpoilerRe.allMatches(text)) {
+      if (match.start > cursor) {
+        final plain = text.substring(cursor, match.start).trim();
+        if (plain.isNotEmpty) segments.add((spoiler: false, body: plain));
+      }
+      final body = (match.group(1) ?? '').trim();
+      if (body.isNotEmpty) segments.add((spoiler: true, body: body));
+      cursor = match.end;
+    }
+    if (cursor < text.length) {
+      final tail = text.substring(cursor).trim();
+      if (tail.isNotEmpty) segments.add((spoiler: false, body: tail));
+    }
+
+    if (segments.isEmpty) return const SizedBox.shrink();
+    if (segments.length == 1 && !segments.first.spoiler) {
+      return _LinkifiedAboutText(text: segments.first.body, style: style);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < segments.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          if (segments[i].spoiler)
+            _SpoilerBlock(text: segments[i].body, style: style)
+          else
+            _LinkifiedAboutText(text: segments[i].body, style: style),
+        ],
+      ],
+    );
+  }
+}
+
+class _SpoilerBlock extends StatefulWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _SpoilerBlock({required this.text, this.style});
+
+  @override
+  State<_SpoilerBlock> createState() => _SpoilerBlockState();
+}
+
+class _SpoilerBlockState extends State<_SpoilerBlock> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Text(
+                _expanded ? 'Hide spoiler' : 'Spoiler',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                    child: _LinkifiedAboutText(
+                      text: widget.text,
+                      style: widget.style,
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final RegExp _aboutLinkRe = RegExp(
+  r'(https?://[^\s)\]]+)|((?:Twitter|X|Instagram|TikTok)\s*:\s*)(@([A-Za-z0-9_.]+))',
+  caseSensitive: false,
+);
+
+/// Selectable text that turns URLs and `Twitter/X/Instagram/TikTok: @handle` mentions
+/// into tappable links, properly disposing its [TapGestureRecognizer]s.
+class _LinkifiedAboutText extends StatefulWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _LinkifiedAboutText({required this.text, this.style});
+
+  @override
+  State<_LinkifiedAboutText> createState() => _LinkifiedAboutTextState();
+}
+
+class _LinkifiedAboutTextState extends State<_LinkifiedAboutText> {
+  final List<TapGestureRecognizer> _recognizers = [];
+
+  @override
+  void dispose() {
+    _clearRecognizers();
+    super.dispose();
+  }
+
+  void _clearRecognizers() {
+    for (final r in _recognizers) {
+      r.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  String _handleUrl(String prefix, String handle) {
+    final lower = prefix.toLowerCase();
+    if (lower.startsWith('instagram')) return 'https://www.instagram.com/$handle';
+    if (lower.startsWith('tiktok')) return 'https://www.tiktok.com/@$handle';
+    return 'https://x.com/$handle';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _clearRecognizers();
+    final linkColor = Theme.of(context).colorScheme.primary;
+    final linkStyle = (widget.style ?? const TextStyle()).copyWith(
+      color: linkColor,
+      decoration: TextDecoration.underline,
+      decorationColor: linkColor,
+    );
+
+    final spans = <InlineSpan>[];
+    var cursor = 0;
+    for (final match in _aboutLinkRe.allMatches(widget.text)) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: widget.text.substring(cursor, match.start)));
+      }
+      final fullUrl = match.group(1);
+      if (fullUrl != null) {
+        final recognizer = TapGestureRecognizer()
+          ..onTap = () => openLink(context, fullUrl);
+        _recognizers.add(recognizer);
+        spans.add(TextSpan(text: fullUrl, style: linkStyle, recognizer: recognizer));
+      } else {
+        final prefix = match.group(2) ?? '';
+        final atHandle = match.group(3) ?? '';
+        final handle = match.group(4) ?? '';
+        if (prefix.isNotEmpty) spans.add(TextSpan(text: prefix));
+        final url = _handleUrl(prefix, handle);
+        final recognizer = TapGestureRecognizer()
+          ..onTap = () => openLink(context, url);
+        _recognizers.add(recognizer);
+        spans.add(TextSpan(text: atHandle, style: linkStyle, recognizer: recognizer));
+      }
+      cursor = match.end;
+    }
+    if (cursor < widget.text.length) {
+      spans.add(TextSpan(text: widget.text.substring(cursor)));
+    }
+
+    return SelectableText.rich(
+      TextSpan(style: widget.style, children: spans),
     );
   }
 }

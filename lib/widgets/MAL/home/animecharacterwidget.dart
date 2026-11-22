@@ -132,6 +132,7 @@ class AnimeCharacterWidget extends StatelessWidget {
   final List<MangaCharacters>? mangaCharacterList;
   final List<CharacterNode>? staffList;
   final DisplayType type;
+  final VoidCallback? onViewAll;
   const AnimeCharacterWidget({
     super.key,
     this.animeCharacterList = const [],
@@ -139,6 +140,7 @@ class AnimeCharacterWidget extends StatelessWidget {
     this.staffList,
     required double horizPadding,
     this.type = DisplayType.grid,
+    this.onViewAll,
   });
 
   static const double _pictureWidth = 100;
@@ -174,6 +176,7 @@ class AnimeCharacterWidget extends StatelessWidget {
         viewportFraction: (_isManga || _isStaff) ? .79 : .89,
         itemsPerPage: _rowsPerPage,
         itemHeight: _rowHeight,
+        onViewAll: onViewAll,
       );
     }
     return ListView.builder(
@@ -356,6 +359,7 @@ class _CharacterPages extends StatefulWidget {
   final double viewportFraction;
   final int itemsPerPage;
   final double itemHeight;
+  final VoidCallback? onViewAll;
 
   const _CharacterPages({
     required this.length,
@@ -363,6 +367,7 @@ class _CharacterPages extends StatefulWidget {
     required this.viewportFraction,
     required this.itemsPerPage,
     required this.itemHeight,
+    this.onViewAll,
   });
 
   @override
@@ -396,12 +401,19 @@ class _CharacterPagesState extends State<_CharacterPages> {
     final noOfPages = (length / perPage).ceil();
     final lastPage = noOfPages - 1;
     final rowsShown = noOfPages == 1 ? length : perPage;
+    final hasViewAll = widget.onViewAll != null;
     return SizedBox(
       height: rowsShown * widget.itemHeight,
       child: PageView.builder(
-        itemCount: noOfPages,
+        itemCount: noOfPages + (hasViewAll ? 1 : 0),
         controller: _controller,
         itemBuilder: (context, pageIndex) {
+          if (hasViewAll && pageIndex == noOfPages) {
+            return HorizontalViewAllCard(
+              onPressed: widget.onViewAll!,
+              margin: const EdgeInsetsDirectional.only(end: 12, top: 4, bottom: 4),
+            );
+          }
           final rows = pageIndex == lastPage ? (length % perPage == 0 ? perPage : length % perPage) : perPage;
           return Padding(
             padding: const EdgeInsetsDirectional.only(end: 12),

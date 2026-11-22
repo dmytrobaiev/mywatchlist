@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/MAL/contentdetailedscreen.dart';
+import 'package:mywatchlist/screens/MAL/detail/sections/section_states.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/utils/app_routes.dart';
 import 'package:mywatchlist/widgets/MAL/home/animegridcard.dart';
@@ -83,7 +84,7 @@ class ContentListWidget extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 4),
         itemBuilder: (context, index) {
           if (index == items.length) {
-            return _ViewAll(onPressed: onViewAll!);
+            return HorizontalViewAllCard(onPressed: onViewAll!);
           }
           final item = items[index];
           final itemCategory = _categoryForItem(item);
@@ -141,22 +142,6 @@ class _EmptyRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ViewAll extends StatelessWidget {
-  final VoidCallback onPressed;
-  const _ViewAll({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: TextButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.arrow_forward),
-        label: Text(S.current.Card_View_All),
       ),
     );
   }

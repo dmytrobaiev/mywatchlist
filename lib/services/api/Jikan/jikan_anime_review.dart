@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class AnimeReview {
   final User? user;
   final int? malId;
@@ -28,19 +30,59 @@ class AnimeReview {
   });
 
   factory AnimeReview.fromJson(Map<String, dynamic> json) {
+    final nestedUser = jikanMap(json['user']);
+    final flatUsername = jikanStr(json['username']);
+    final flatAvatar = jikanStr(json['imageUrl'] ?? json['image_url']);
+    final User? user = nestedUser != null
+        ? User.fromJson(nestedUser)
+        : (flatUsername != null
+            ? User(
+                username: flatUsername,
+                url: 'https://myanimelist.net/profile/${Uri.encodeComponent(flatUsername)}',
+                images: flatAvatar != null
+                    ? Images(jpg: ImageFormat(imageUrl: flatAvatar))
+                    : null,
+              )
+            : null);
+
+    final isSpoiler = (json['isSpoiler'] ?? json['is_spoiler']) as bool?;
+    final isPreliminary = (json['isPreliminary'] ?? json['is_preliminary']) as bool?;
+
+    List<String>? tags;
+    if (json['tags'] is List) {
+      tags = (json['tags'] as List).map((e) => '$e').toList();
+    } else {
+      final tag = jikanStr(json['tag']);
+      final built = <String>[
+        if (tag != null) tag,
+        if (isPreliminary == true && (tag == null || !tag.toLowerCase().contains('preliminary')))
+          'Preliminary',
+        if (isSpoiler == true && (tag == null || !tag.toLowerCase().contains('spoiler')))
+          'Spoiler',
+      ];
+      if (built.isNotEmpty) tags = built;
+    }
+
     return AnimeReview(
-      user: json['user'] != null ? User.fromJson(json['user']) : null,
-      malId: json['mal_id'],
-      url: json['url'],
-      type: json['type'],
-      reactions: json['reactions'] != null ? Reactions.fromJson(json['reactions']) : null,
-      date: json['date'],
-      review: json['review'],
-      score: json['score'],
-      tags: json['tags'] != null ? List<String>.from(json['tags']) : null,
-      isSpoiler: json['is_spoiler'],
-      isPreliminary: json['is_preliminary'],
-      episodesWatched: json['episodes_watched'],
+      user: user,
+      malId: jikanInt(json['reviewId'] ?? json['malId'] ?? json['mal_id']),
+      url: json['url'] as String?,
+      type: json['type'] as String?,
+      reactions: jikanMap(json['reactions']) != null
+          ? Reactions.fromJson(jikanMap(json['reactions'])!)
+          : null,
+      date: json['date'] as String?,
+      review: (json['reviewText'] ?? json['review']) as String?,
+      score: jikanInt(json['score']),
+      tags: tags,
+      isSpoiler: isSpoiler,
+      isPreliminary: isPreliminary,
+      episodesWatched: jikanInt(
+        json['episodesWatched'] ??
+            json['episodes_watched'] ??
+            json['chaptersRead'] ??
+            json['chapters_read'],
+      ),
     );
   }
 }
@@ -57,10 +99,13 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
+    final imgUrl = jikanStr(json['imageUrl'] ?? json['image_url']);
     return User(
-      username: json['username'],
-      url: json['url'],
-      images: json['images'] != null ? Images.fromJson(json['images']) : null,
+      username: json['username'] as String?,
+      url: json['url'] as String?,
+      images: (json['images'] != null || imgUrl != null)
+          ? Images.fromAny(json['images'], fallbackImageUrl: imgUrl)
+          : null,
     );
   }
 }
@@ -71,11 +116,23 @@ class Images {
 
   Images({this.jpg, this.webp});
 
-  factory Images.fromJson(Map<String, dynamic> json) {
-    return Images(
-      jpg: json['jpg'] != null ? ImageFormat.fromJson(json['jpg']) : null,
-      webp: json['webp'] != null ? ImageFormat.fromJson(json['webp']) : null,
-    );
+  factory Images.fromJson(Map<String, dynamic> json) => Images.fromAny(json);
+
+  factory Images.fromAny(Object? raw, {String? fallbackImageUrl}) {
+    final map = jikanMap(raw);
+    if (map != null && (map['jpg'] != null || map['webp'] != null)) {
+      return Images(
+        jpg: jikanMap(map['jpg']) != null
+            ? ImageFormat.fromJson(jikanMap(map['jpg'])!)
+            : null,
+        webp: jikanMap(map['webp']) != null
+            ? ImageFormat.fromJson(jikanMap(map['webp'])!)
+            : null,
+      );
+    }
+    final sizes = jikanImageSizes(raw, fallbackImageUrl: fallbackImageUrl);
+    final url = sizes.medium ?? sizes.large ?? sizes.small;
+    return Images(jpg: url != null ? ImageFormat(imageUrl: url) : null);
   }
 }
 
@@ -86,7 +143,7 @@ class ImageFormat {
 
   factory ImageFormat.fromJson(Map<String, dynamic> json) {
     return ImageFormat(
-      imageUrl: json['image_url'],
+      imageUrl: jikanStr(json['image_url'] ?? json['imageUrl'] ?? json['medium']),
     );
   }
 }
@@ -114,14 +171,14 @@ class Reactions {
 
   factory Reactions.fromJson(Map<String, dynamic> json) {
     return Reactions(
-      overall: json['overall'],
-      nice: json['nice'],
-      loveIt: json['love_it'],
-      funny: json['funny'],
-      confusing: json['confusing'],
-      informative: json['informative'],
-      wellWritten: json['well_written'],
-      creative: json['creative'],
+      overall: jikanInt(json['overall']),
+      nice: jikanInt(json['nice']),
+      loveIt: jikanInt(json['loveIt'] ?? json['love_it']),
+      funny: jikanInt(json['funny']),
+      confusing: jikanInt(json['confusing']),
+      informative: jikanInt(json['informative']),
+      wellWritten: jikanInt(json['wellWritten'] ?? json['well_written']),
+      creative: jikanInt(json['creative']),
     );
   }
 }
@@ -135,10 +192,11 @@ class Pagination {
     this.hasNextPage,
   });
 
-  factory Pagination.fromJson(Map<String, dynamic> json) {
+  factory Pagination.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return Pagination(hasNextPage: false);
     return Pagination(
-      lastVisiblePage: json['last_visible_page'],
-      hasNextPage: json['has_next_page'],
+      lastVisiblePage: jikanLastVisiblePage(json),
+      hasNextPage: jikanHasNextPage(json),
     );
   }
 }
@@ -154,8 +212,11 @@ class AnimeReviewsResponse {
 
   factory AnimeReviewsResponse.fromJson(Map<String, dynamic> json) {
     return AnimeReviewsResponse(
-      data: (json['data'] as List).map((e) => AnimeReview.fromJson(e)).toList(),
-      pagination: Pagination.fromJson(json['pagination']),
+      data: ((json['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => AnimeReview.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      pagination: Pagination.fromJson(jikanPagination(json)),
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class AnimeUserUpdate {
   final User? user;
   final int? score;
@@ -24,17 +26,35 @@ class AnimeUserUpdate {
   });
 
   factory AnimeUserUpdate.fromJson(Map<String, dynamic> json) {
+    final nestedUser = jikanMap(json['user']);
+    final flatUsername = jikanStr(json['username']);
+    final flatAvatar = jikanStr(json['imageUrl'] ?? json['image_url']);
+    final User? user = nestedUser != null
+        ? User.fromJson(nestedUser)
+        : (flatUsername != null
+            ? User(
+                username: flatUsername,
+                url: 'https://myanimelist.net/profile/${Uri.encodeComponent(flatUsername)}',
+                images: flatAvatar != null
+                    ? Images(jpg: ImageFormat(imageUrl: flatAvatar))
+                    : null,
+              )
+            : null);
+
+    final progress = jikanInt(json['progress']);
+    final total = jikanInt(json['total']);
+
     return AnimeUserUpdate(
-      user: json['user'] != null ? User.fromJson(json['user']) : null,
-      score: json['score'],
-      status: json['status'],
-      episodesSeen: json['episodes_seen'],
-      episodesTotal: json['episodes_total'],
-      volumesRead: json['volumes_read'],
-      volumesTotal: json['volumes_total'],
-      chaptersRead: json['chapters_read'],
-      chaptersTotal: json['chapters_total'],
-      date: json['date'],
+      user: user,
+      score: jikanInt(json['score']),
+      status: json['status'] as String?,
+      episodesSeen: jikanInt(json['episodesSeen'] ?? json['episodes_seen']) ?? progress,
+      episodesTotal: jikanInt(json['episodesTotal'] ?? json['episodes_total']) ?? total,
+      volumesRead: jikanInt(json['volumesRead'] ?? json['volumes_read']),
+      volumesTotal: jikanInt(json['volumesTotal'] ?? json['volumes_total']),
+      chaptersRead: jikanInt(json['chaptersRead'] ?? json['chapters_read']) ?? progress,
+      chaptersTotal: jikanInt(json['chaptersTotal'] ?? json['chapters_total']) ?? total,
+      date: json['date'] as String?,
     );
   }
 }
@@ -51,10 +71,13 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
+    final imgUrl = jikanStr(json['imageUrl'] ?? json['image_url']);
     return User(
-      username: json['username'],
-      url: json['url'],
-      images: json['images'] != null ? Images.fromJson(json['images']) : null,
+      username: json['username'] as String?,
+      url: json['url'] as String?,
+      images: (json['images'] != null || imgUrl != null)
+          ? Images.fromAny(json['images'], fallbackImageUrl: imgUrl)
+          : null,
     );
   }
 }
@@ -65,11 +88,23 @@ class Images {
 
   Images({this.jpg, this.webp});
 
-  factory Images.fromJson(Map<String, dynamic> json) {
-    return Images(
-      jpg: json['jpg'] != null ? ImageFormat.fromJson(json['jpg']) : null,
-      webp: json['webp'] != null ? ImageFormat.fromJson(json['webp']) : null,
-    );
+  factory Images.fromJson(Map<String, dynamic> json) => Images.fromAny(json);
+
+  factory Images.fromAny(Object? raw, {String? fallbackImageUrl}) {
+    final map = jikanMap(raw);
+    if (map != null && (map['jpg'] != null || map['webp'] != null)) {
+      return Images(
+        jpg: jikanMap(map['jpg']) != null
+            ? ImageFormat.fromJson(jikanMap(map['jpg'])!)
+            : null,
+        webp: jikanMap(map['webp']) != null
+            ? ImageFormat.fromJson(jikanMap(map['webp'])!)
+            : null,
+      );
+    }
+    final sizes = jikanImageSizes(raw, fallbackImageUrl: fallbackImageUrl);
+    final url = sizes.medium ?? sizes.large ?? sizes.small;
+    return Images(jpg: url != null ? ImageFormat(imageUrl: url) : null);
   }
 }
 
@@ -80,7 +115,7 @@ class ImageFormat {
 
   factory ImageFormat.fromJson(Map<String, dynamic> json) {
     return ImageFormat(
-      imageUrl: json['image_url'],
+      imageUrl: jikanStr(json['image_url'] ?? json['imageUrl'] ?? json['medium']),
     );
   }
 }
@@ -94,10 +129,11 @@ class Pagination {
     this.hasNextPage,
   });
 
-  factory Pagination.fromJson(Map<String, dynamic> json) {
+  factory Pagination.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return Pagination(hasNextPage: false);
     return Pagination(
-      lastVisiblePage: json['last_visible_page'],
-      hasNextPage: json['has_next_page'],
+      lastVisiblePage: jikanLastVisiblePage(json),
+      hasNextPage: jikanHasNextPage(json),
     );
   }
 }
@@ -113,8 +149,11 @@ class AnimeUserUpdatesResponse {
 
   factory AnimeUserUpdatesResponse.fromJson(Map<String, dynamic> json) {
     return AnimeUserUpdatesResponse(
-      data: (json['data'] as List).map((e) => AnimeUserUpdate.fromJson(e)).toList(),
-      pagination: Pagination.fromJson(json['pagination']),
+      data: ((json['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => AnimeUserUpdate.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      pagination: Pagination.fromJson(jikanPagination(json)),
     );
   }
 }

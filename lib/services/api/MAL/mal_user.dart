@@ -10,6 +10,7 @@ import 'package:mywatchlist/services/api/MAL/models/search_result.dart';
 import 'package:mywatchlist/services/api/MAL/models/mal_user_search.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/html_parsers.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_api.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
 import 'package:html/parser.dart' as htmlParser;
 
 class MalUser {
@@ -42,16 +43,29 @@ class MalUser {
     try {
       final jikanApi = JikanApi();
       final data = await jikanApi.getUserFullProfile(username);
+      final profile = jikanMap(data['profile']) ?? data;
+      final animeStats = jikanMap(jikanMap(data['statistics'])?['anime']) ?? const {};
       return MalUserProf.fromJson({
-        'id': data['mal_id'] ?? 0,
-        'name': data['username'] ?? username,
-        'location': data['location'] ?? '',
-        'gender': data['gender'],
-        'birthday': data['birthday'],
+        'id': jikanInt(profile['malId'] ?? profile['mal_id']) ?? 0,
+        'name': profile['canonicalUsername'] ?? profile['username'] ?? username,
+        'location': profile['location'] ?? '',
+        'gender': profile['gender'],
+        'birthday': profile['birthday'],
         'time_zone': '',
-        'joined_at': data['joined'] ?? '',
-        'picture': data['images']?['jpg']?['image_url'] ?? '',
-        'anime_statistics': data['statistics']?['anime'] ?? {},
+        'joined_at': profile['joinedAt'] ?? profile['joined'] ?? '',
+        'picture': jikanBestImage(profile) ?? '',
+        'anime_statistics': {
+          'mean_score': animeStats['meanScore'] ?? animeStats['mean_score'],
+          'num_days_watched': animeStats['daysWatched'] ?? animeStats['days_watched'],
+          'num_episodes': animeStats['episodesWatched'] ?? animeStats['episodes_watched'],
+          'num_items': animeStats['totalEntries'] ?? animeStats['total_entries'],
+          'num_items_watching': animeStats['watching'],
+          'num_items_completed': animeStats['completed'],
+          'num_items_on_hold': animeStats['onHold'] ?? animeStats['on_hold'],
+          'num_items_dropped': animeStats['dropped'],
+          'num_items_plan_to_watch': animeStats['planToWatch'] ?? animeStats['plan_to_watch'],
+          'num_times_rewatched': animeStats['rewatched'],
+        },
       });
     } catch (e) {
       debugPrint('Jikan fallback failed for $username: $e');

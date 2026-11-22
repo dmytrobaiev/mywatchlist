@@ -208,9 +208,11 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
     final date = episodeDate(context, e);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Text(s.Ep_Number(e.number),
               style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary)),
           Text(e.title.isEmpty ? s.Ep_Number(e.number) : e.title,
@@ -239,7 +241,7 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
             },
           ),
           const SizedBox(height: 16),
-          Wrap(spacing: 8, children: [
+          Wrap(spacing: 8, runSpacing: 8, children: [
             if (e.topicId != null)
               FilledButton.tonalIcon(
                 icon: const Icon(Icons.forum_outlined, size: 18),
@@ -267,6 +269,7 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
             ),
           ]),
         ],
+      ),
       ),
     );
   }

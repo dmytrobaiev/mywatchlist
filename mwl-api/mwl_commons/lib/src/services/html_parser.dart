@@ -1149,13 +1149,24 @@ class HtmlParsers {
     final clubs = <Map<String, dynamic>>[];
 
     try {
-      // Only club links carry a `cid`; the site menu also links to clubs.php without one.
-      for (final link in document.querySelectorAll('li a[href*="cid="]')) {
+      // Only match actual MAL club links (`clubs.php?cid=` or `/clubs/`), never forum
+      // `topicid=` links (which also end in `cid=`), and skip links inside About Me bios.
+      bool isInsideAbout(Element el) {
+        for (var p = el.parent; p != null; p = p.parent) {
+          if (p.classes.contains('user-profile-about')) return true;
+        }
+        return false;
+      }
+
+      final seen = <int>{};
+      final clubIdRe = RegExp(r'(?:clubs\.php\?[^#]*\bcid=|/clubs/)(\d+)');
+      for (final link
+          in document.querySelectorAll('a[href*="clubs.php?cid="], a[href*="/clubs/"]')) {
+        if (isInsideAbout(link)) continue;
         final href = link.attributes['href'] ?? '';
-        final id = int.tryParse(
-            RegExp(r'cid=(\d+)').firstMatch(href)?.group(1) ?? '');
+        final id = int.tryParse(clubIdRe.firstMatch(href)?.group(1) ?? '');
         final name = link.text.trim();
-        if (id == null || name.isEmpty) continue;
+        if (id == null || name.isEmpty || !seen.add(id)) continue;
         clubs.add({'id': id, 'name': name});
       }
     } catch (e) {

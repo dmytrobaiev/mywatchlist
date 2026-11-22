@@ -67,9 +67,10 @@ class DetailEditPanel extends StatelessWidget {
     final saved = content?.myListStatus;
     return ConstrainedBox(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
       ),
       child: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

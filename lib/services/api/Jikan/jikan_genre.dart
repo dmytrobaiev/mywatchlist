@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class Genre {
   final int? malId;
   final String? name;
@@ -13,10 +15,10 @@ class Genre {
 
   factory Genre.fromJson(Map<String, dynamic> json) {
     return Genre(
-      malId: json['mal_id'],
-      name: json['name'],
-      url: json['url'],
-      count: json['count'],
+      malId: jikanInt(json['malId'] ?? json['mal_id']),
+      name: json['name'] as String?,
+      url: json['url'] as String?,
+      count: jikanInt(json['count']),
     );
   }
 }
@@ -28,7 +30,10 @@ class GenreResponse {
 
   factory GenreResponse.fromJson(Map<String, dynamic> json) {
     return GenreResponse(
-      data: (json['data'] as List).map((e) => Genre.fromJson(e)).toList(),
+      data: ((json['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Genre.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
     );
   }
 }

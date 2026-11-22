@@ -10,6 +10,7 @@ import 'package:mywatchlist/screens/search/search_sources.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_anime.dart' as jikan_model;
 import 'package:mywatchlist/services/api/Jikan/jikan_api.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
+import 'package:mywatchlist/services/api/jikan_source.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/services/api/MAL/mal_api.dart';
 import 'package:mywatchlist/services/api/MAL/mal_forum_api.dart';
@@ -268,11 +269,11 @@ class SearchService {
       default:
         if (page.source == MediaSource.jikan) {
           page._jikanPage++;
-          final items = SearchCategory.isMedia(page.category)
+          final result = SearchCategory.isMedia(page.category)
               ? await _jikanPageOf(page.category, query, filters, page._jikanPage)
               : await _peoplePage(page.category, query, page._jikanPage);
-          page.media.addAll(items);
-          page.hasMore = items.length >= jikanPageSize;
+          page.media.addAll(result.items);
+          page.hasMore = result.hasMore;
         } else if (page.source == MediaSource.malPage) {
           page._malPage++;
           final answer = await _malPageOf(page.category, query, filters, page._malPage);
@@ -344,6 +345,35 @@ class SearchService {
 
   Future<void> _media(SearchPage page, String query, SearchFilters filters) async {
     final manga = page.category == SearchCategory.manga;
+    if (query.isEmpty && filters.isNotEmpty) {
+      SearchResult? preset;
+      if (manga) {
+        final rank = filters.matchMangaRanking();
+        if (rank != null) {
+          preset = await MalApi.getContentRankingResult(rank,
+              limit: mediaPageSize, category: SearchCategory.manga);
+        }
+      } else {
+        final rank = filters.matchAnimeRanking();
+        if (rank != null) {
+          preset = await MalApi.getContentRankingResult(rank,
+              limit: mediaPageSize, category: SearchCategory.anime);
+        } else {
+          final season = filters.matchSeason();
+          if (season != null) {
+            preset = await MalApi.getAnimeSeasonalResult(season.season, season.year,
+                limit: mediaPageSize);
+          }
+        }
+      }
+      if (preset != null) {
+        page.source = MediaSource.malApi;
+        page.paged = preset;
+        page.media = List.of(preset.data);
+        page.hasMore = preset.hasNextPage;
+        return;
+      }
+    }
     final idHit = filters.isEmpty && isIdQuery(query) ? _idHit(page.category, query) : null;
     final official = filters.isEmpty && query.length >= MalSearchQuery.minQueryLength;
     SourceAnswer answer;
@@ -381,12 +411,12 @@ class SearchService {
   Future<SourceAnswer> _jikanOrMalPage(
     String category,
     String query, {
-    required Future<List<Anime>> Function() jikan,
+    required Future<({List<Anime> items, bool hasMore})> Function() jikan,
     required Future<SourceAnswer> Function() malPage,
   }) async {
     Future<SourceAnswer> viaJikan() async {
-      final items = await jikan();
-      return SourceAnswer(MediaSource.jikan, items, hasMore: items.length >= jikanPageSize);
+      final result = await jikan();
+      return SourceAnswer(MediaSource.jikan, result.items, hasMore: result.hasMore);
     }
 
     if (MalSearchQuery.isTooShort(query)) {
@@ -438,25 +468,31 @@ class SearchService {
     }
   }
 
-  Future<List<Anime>> _jikanPageOf(
+  Future<({List<Anime> items, bool hasMore})> _jikanPageOf(
     String category,
     String query,
     SearchFilters filters,
     int pageNumber,
   ) async {
+    // jikan-edge strictly rejects genres_exclude and producers with 400; let MAL's search page answer.
+    if (JikanSource.instance.active == DataSource.jikan &&
+        (filters.genresOut.isNotEmpty || filters.integer(FilterKey.producer) != null)) {
+      throw UnsupportedError('jikan-edge does not support genres_exclude or producers');
+    }
     final jikan = JikanApi();
     final manga = category == SearchCategory.manga;
     final text = query.isEmpty ? null : query;
     final minScore = filters.integer(FilterKey.score)?.toDouble();
     final genres = _ids(filters.genresIn);
-    final genresOut = _ids(filters.genresOut);
-    final sfw = Preferences.general.nsfw ? null : true;
+    final sfw = !Preferences.general.nsfw;
     final sort = filters.text(FilterKey.sort);
-    final items = manga
-        ? await jikan.getMangaSearch(
+    final seasonBounds = filters.seasonDateBounds;
+    final startDate = filters.text(FilterKey.startDate) ?? seasonBounds?.start;
+    final endDate = filters.text(FilterKey.endDate) ?? seasonBounds?.end;
+    final result = manga
+        ? await jikan.getMangaSearchPaged(
             q: text,
             page: pageNumber,
-            limit: jikanPageSize,
             type: filters.text(FilterKey.type),
             status: filters.text(FilterKey.status),
             orderBy: filters.text(FilterKey.orderBy),
@@ -464,16 +500,13 @@ class SearchService {
             minScore: minScore,
             letter: filters.text(FilterKey.letter),
             genres: genres,
-            genresExclude: genresOut,
             magazines: filters.integer(FilterKey.magazine)?.toString(),
-            startDate: filters.text(FilterKey.startDate),
-            endDate: filters.text(FilterKey.endDate),
-            sfw: sfw,
+            startDate: startDate,
+            endDate: endDate,
           )
-        : await jikan.getAnimeSearch(
+        : await jikan.getAnimeSearchPaged(
             q: text,
             page: pageNumber,
-            limit: jikanPageSize,
             type: _enumByValue(AnimeSearchQueryType.values, (e) => e.value, filters.text(FilterKey.type)),
             status: _enumByValue(AnimeSearchQueryStatus.values, (e) => e.value, filters.text(FilterKey.status)),
             rating: _enumByValue(AnimeSearchQueryRating.values, (e) => e.value, filters.text(FilterKey.rating)),
@@ -482,13 +515,14 @@ class SearchService {
             minScore: minScore,
             letter: filters.text(FilterKey.letter),
             genres: genres,
-            genresExclude: genresOut,
-            producers: filters.integer(FilterKey.producer)?.toString(),
-            startDate: filters.text(FilterKey.startDate),
-            endDate: filters.text(FilterKey.endDate),
-            sfw: sfw,
+            startDate: startDate,
+            endDate: endDate,
           );
-    return items.map(jikanToAnime).toList();
+    var items = result.data.map(jikanToAnime).toList();
+    if (sfw) {
+      items = items.where((a) => !a.isAdult).toList();
+    }
+    return (items: items, hasMore: result.hasNextPage);
   }
 
   static String? _ids(List<int> ids) => ids.isEmpty ? null : ids.join(',');
@@ -513,6 +547,7 @@ class SearchService {
       popularity: j.popularity,
       synopsis: j.synopsis,
       numEpisodes: j.episodes,
+      numVolumes: j.volumes,
       startDate: j.aired?.from,
       endDate: j.aired?.to,
       mediaType: j.type,
@@ -527,6 +562,7 @@ class SearchService {
         ...(j.genres ?? []).map((g) => g.name ?? ''),
         ...(j.themes ?? []).map((g) => g.name ?? ''),
       ],
+      nsfw: Anime.nsfwFromJikanRating(j.rating),
     );
   }
 
@@ -544,32 +580,39 @@ class SearchService {
     page.hasMore = answer.hasMore;
   }
 
-  Future<List<Anime>> _peoplePage(String category, String query, int pageNumber) async {
+  Future<({List<Anime> items, bool hasMore})> _peoplePage(
+      String category, String query, int pageNumber) async {
     final jikan = JikanApi();
     if (category == SearchCategory.character) {
-      final chars = await jikan.searchCharacters(q: query, page: pageNumber, limit: jikanPageSize);
-      return [
-        for (final c in chars)
-          Anime(
-            id: c.malId ?? 0,
-            title: c.name ?? '',
-            imageUrl: c.images?.jpg?.imageUrl ?? '',
-            score: (c.favorites ?? 0).toDouble(),
-            members: c.favorites ?? 0,
-          ),
-      ];
+      final result = await jikan.searchCharactersPaged(q: query, page: pageNumber);
+      return (
+        items: [
+          for (final c in result.data)
+            Anime(
+              id: c.malId ?? 0,
+              title: c.name ?? '',
+              imageUrl: c.images?.jpg?.imageUrl ?? '',
+              score: (c.favorites ?? 0).toDouble(),
+              members: c.favorites ?? 0,
+            ),
+        ],
+        hasMore: result.hasNextPage,
+      );
     }
-    final people = await jikan.searchPeople(q: query, page: pageNumber, limit: jikanPageSize);
-    return [
-      for (final p in people)
-        Anime(
-          id: p.malId ?? 0,
-          title: p.name ?? '',
-          imageUrl: p.images?.jpg?.imageUrl ?? '',
-          score: (p.favorites ?? 0).toDouble(),
-          members: p.favorites ?? 0,
-        ),
-    ];
+    final result = await jikan.searchPeoplePaged(q: query, page: pageNumber);
+    return (
+      items: [
+        for (final p in result.data)
+          Anime(
+            id: p.malId ?? 0,
+            title: p.name ?? '',
+            imageUrl: p.images?.jpg?.imageUrl ?? '',
+            score: (p.favorites ?? 0).toDouble(),
+            members: p.favorites ?? 0,
+          ),
+      ],
+      hasMore: result.hasNextPage,
+    );
   }
 
   // --- Forum --------------------------------------------------------------------------------

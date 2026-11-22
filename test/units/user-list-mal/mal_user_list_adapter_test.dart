@@ -156,10 +156,10 @@ void main() {
             }
           }),
       jikanGet: (uri) async {
-        expect(uri.path, '/v4/users/Tester/statistics');
+        expect(uri.path, '/v1/users/Tester/statistics');
         return _json({
           'data': {
-            'manga': {'reading': 4, 'completed': 5, 'on_hold': 0, 'dropped': 1, 'plan_to_read': 7}
+            'manga': {'reading': 4, 'completed': 5, 'onHold': 0, 'dropped': 1, 'planToRead': 7}
           }
         });
       },

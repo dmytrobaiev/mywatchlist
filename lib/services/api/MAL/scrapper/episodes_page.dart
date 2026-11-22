@@ -136,6 +136,9 @@ class MalEpisodesPage {
   /// Jikan's last page of each anime, read along with its episodes.
   static final Map<int, int> _jikanLastPage = {};
 
+  /// Whether Jikan reported a next page for `animeId:page` (jikan-edge omits total/lastPage).
+  static final Map<String, bool> _jikanHasNext = {};
+
   /// Restores the real network access and empties the cache (tests).
   @visibleForTesting
   static void reset() {
@@ -144,6 +147,7 @@ class MalEpisodesPage {
     parseInline = false;
     _cache.clear();
     _jikanLastPage.clear();
+    _jikanHasNext.clear();
   }
 
   /// Page of [animeId] starting at [offset]. Throws only when neither MAL nor
@@ -168,7 +172,13 @@ class MalEpisodesPage {
     final extra = await jikan;
     if (page == null) {
       if (extra != null && extra.isNotEmpty) {
-        page = _fromJikan(extra, offset, lastPage: _jikanLastPage[animeId]);
+        final pageNum = offset ~/ pageSize + 1;
+        page = _fromJikan(
+          extra,
+          offset,
+          lastPage: _jikanLastPage[animeId],
+          hasNextPage: _jikanHasNext['$animeId:$pageNum'],
+        );
       } else if (error != null) {
         throw error;
       } else {
@@ -216,10 +226,11 @@ class MalEpisodesPage {
 
   /// A Jikan page of 100 episodes is MAL's page at the same offset. Without Jikan's last page,
   /// a full page offers the next one.
-  static EpisodesPage _fromJikan(List<AnimeEpisode> jikan, int offset, {int? lastPage}) {
+  static EpisodesPage _fromJikan(List<AnimeEpisode> jikan, int offset,
+      {int? lastPage, bool? hasNextPage}) {
     final last = lastPage != null && lastPage > 0
         ? (lastPage - 1) * pageSize
-        : jikan.length >= pageSize
+        : (hasNextPage ?? (jikan.length >= pageSize))
             ? offset + pageSize
             : offset;
     return EpisodesPage(
@@ -256,6 +267,8 @@ class MalEpisodesPage {
         await JikanApi().getAnimeEpisodes(animeId, page: page).timeout(timeout);
     final last = response.pagination.lastVisiblePage;
     if (last != null) _jikanLastPage[animeId] = last;
+    final hasNext = response.pagination.hasNextPage;
+    if (hasNext != null) _jikanHasNext['$animeId:$page'] = hasNext;
     return response.data;
   }
 }

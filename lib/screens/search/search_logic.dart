@@ -51,7 +51,35 @@ extension _SearchLogic on _GeneralSearchScreenState {
   }
 
   Future<void> _runSearch(String raw) async {
-    final query = raw.trim();
+    var query = raw.trim();
+    if (query.startsWith('#')) {
+      final special = SpecialQuery.parse(query.substring(1));
+      if (special is RankingQuery) {
+        _searchController.clear();
+        _set(() {
+          _specialQuery = false;
+          _category = special.category;
+          _filters = SearchFilters.forAnimeRanking(special.type);
+        });
+        query = '';
+      } else if (special is MangaRankingQuery) {
+        _searchController.clear();
+        _set(() {
+          _specialQuery = false;
+          _category = SearchCategory.manga;
+          _filters = SearchFilters.forMangaRanking(special.type);
+        });
+        query = '';
+      } else if (special is SeasonQuery) {
+        _searchController.clear();
+        _set(() {
+          _specialQuery = false;
+          _category = SearchCategory.anime;
+          _filters = SearchFilters.forSeason(special.season, special.year);
+        });
+        query = '';
+      }
+    }
     if (query.isEmpty && _filters.isEmpty && !SearchCategory.isBrowsable(_category)) return;
     _suggestTimer?.cancel();
     _suggestToken++;
@@ -142,7 +170,10 @@ extension _SearchLogic on _GeneralSearchScreenState {
       ..gridAxisCount = result.display.gridColumns
       ..gridHeight = result.display.gridHeight
       ..saveDisplaySettings();
+    final clearSpecial = _searchController.text.trim().startsWith('#');
+    if (clearSpecial) _searchController.clear();
     _set(() {
+      if (clearSpecial) _specialQuery = false;
       _category = result.category;
       _filters = result.filters;
       _display = result.display;

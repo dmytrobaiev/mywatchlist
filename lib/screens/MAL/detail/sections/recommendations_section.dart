@@ -4,32 +4,36 @@ import 'package:mywatchlist/constants/constants.dart' show AccountType, TabType,
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/MAL/detail/detail_data.dart';
 import 'package:mywatchlist/screens/MAL/detail/detail_sections.dart';
-import 'package:mywatchlist/screens/MAL/detail/pages/full_recommendations_page.dart';
+import 'package:mywatchlist/screens/MAL/detail/pages/recommendations_list_page.dart';
 import 'package:mywatchlist/services/api/MAL/web/recommendation_write_api.dart';
 import 'package:mywatchlist/user/accounts/account_bloc.dart';
 import 'package:mywatchlist/utils/web_launcher.dart';
 import 'package:mywatchlist/widgets/MAL/content/recommanimewidget.dart';
 
-/// Recommendations; arrow opens the page with the users' comments. With a MyAnimeList account
-/// the title row also offers MAL's own form to recommend a similar title.
+/// Recommendations; arrow and trailing card open the Search-style recommendations list.
 DetailSection? recommendationsSection(DetailData data) {
   final recommendations = data.content?.recommendations;
   if (nullOrEmpty(recommendations)) return null;
+  void openAll(BuildContext context) => gotoPage(
+        context: context,
+        newPage: RecommendationsListPage(
+          id: data.id,
+          category: data.category,
+          recommendations: recommendations!,
+        ),
+      );
   return DetailSection(
     TabType.Recommendations,
-    RecommendedAnimeWidget(
-      category: data.category,
-      horizPadding: detailHorizPadding,
-      recommAnime: recommendations!,
-    ),
-    trailing: _RecommendButton(category: data.category, id: data.id),
-    onViewAll: (context) => gotoPage(
-      context: context,
-      newPage: Scaffold(
-        appBar: AppBar(title: Text(S.current.Recommendations)),
-        body: ContentFullRecommendation(id: data.id, category: data.category),
+    Builder(
+      builder: (context) => RecommendedAnimeWidget(
+        category: data.category,
+        horizPadding: detailHorizPadding,
+        recommAnime: recommendations!,
+        onViewAll: () => openAll(context),
       ),
     ),
+    trailing: _RecommendButton(category: data.category, id: data.id),
+    onViewAll: openAll,
   );
 }
 

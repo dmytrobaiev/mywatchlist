@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class MalAnime {
   final int id;
   final String title;
@@ -155,67 +157,95 @@ class MalAnime {
     );
   }
 
-  /// Factory from Jikan full anime data (used as fallback for getAnimeDetails)
+  /// Factory from Jikan (`jikan-edge` or Jikan v4 / Tenrai) full anime/manga data.
   factory MalAnime.fromJikanFullById(Map<String, dynamic> json) {
-    final images = json['images'] as Map<String, dynamic>?;
-    final jpgImages = images?['jpg'] as Map<String, dynamic>?;
+    final sizes = jikanImageSizes(
+      json['images'],
+      fallbackImageUrl: jikanStr(json['imageUrl'] ?? json['image_url']),
+    );
+    final aired = jikanMap(json['aired'] ?? json['published']);
+    final broadcast = jikanMap(json['broadcast']);
+    final rawSynonyms = json['titleSynonyms'] ?? json['title_synonyms'];
+    final rawSerials = json['serializations'] ?? json['serialization'];
+    List<MalSerialization>? serializations;
+    if (rawSerials is List) {
+      serializations = rawSerials
+          .whereType<Map>()
+          .map((s) => MalSerialization(
+                id: jikanInt(s['malId'] ?? s['mal_id']) ?? 0,
+                name: s['name'] as String? ?? '',
+              ))
+          .toList();
+    } else if (rawSerials is Map) {
+      serializations = [
+        MalSerialization(
+          id: jikanInt(rawSerials['malId'] ?? rawSerials['mal_id']) ?? 0,
+          name: rawSerials['name'] as String? ?? '',
+        ),
+      ];
+    }
 
     return MalAnime(
-      id: json['mal_id'] as int,
+      id: jikanInt(json['malId'] ?? json['mal_id']) ?? 0,
       title: json['title'] as String? ?? '',
       mainPicture: Picture(
-        medium: jpgImages?['image_url'] as String?,
-        large: jpgImages?['large_image_url'] as String?,
+        medium: sizes.medium ?? sizes.large ?? sizes.small,
+        large: sizes.large ?? sizes.medium,
       ),
       alternativeTitles: AlternativeTitles(
-        en: json['title_english'] as String?,
-        ja: json['title_japanese'] as String?,
-        synonyms: (json['title_synonyms'] as List<dynamic>?)?.cast<String>(),
+        en: (json['titleEnglish'] ?? json['title_english']) as String?,
+        ja: (json['titleJapanese'] ?? json['title_japanese']) as String?,
+        synonyms: rawSynonyms is List ? rawSynonyms.map((e) => '$e').toList() : null,
       ),
-      startDate: json['aired']?['from'] as String?,
-      endDate: json['aired']?['to'] as String?,
+      startDate: (aired?['from'] ?? json['startDate']) as String?,
+      endDate: (aired?['to'] ?? json['endDate']) as String?,
       synopsis: json['synopsis'] as String?,
-      mean: (json['score'] as num?)?.toDouble(),
-      rank: json['rank'] as int?,
-      popularity: json['popularity'] as int?,
-      numListUsers: json['members'] as int?,
-      numScoringUsers: json['scored_by'] as int?,
+      mean: jikanDouble(json['score']),
+      rank: jikanInt(json['rank']),
+      popularity: jikanInt(json['popularity']),
+      numListUsers: jikanInt(json['members']),
+      numScoringUsers: jikanInt(json['scoredBy'] ?? json['scored_by']),
       mediaType: json['type'] as String?,
       status: json['status'] as String?,
       genres: [
-        ..._jikanGenres(json['genres']),
-        ..._jikanGenres(json['themes']),
-        ..._jikanGenres(json['explicit_genres']),
-        ..._jikanGenres(json['demographics']),
+        ..._jikanGenres(json['genres'] as List<dynamic>?),
+        ..._jikanGenres(json['themes'] as List<dynamic>?),
+        ..._jikanGenres((json['explicitGenres'] ?? json['explicit_genres']) as List<dynamic>?),
+        ..._jikanGenres(json['demographics'] as List<dynamic>?),
       ],
-      numEpisodes: json['episodes'] as int?,
+      numEpisodes: jikanInt(json['episodes']),
+      numVolumes: jikanInt(json['volumes']),
+      numChapters: jikanInt(json['chapters']),
       startSeason: json['season'] != null
-          ? Season(season: json['season'], year: json['year'] ?? 0)
+          ? Season(season: json['season'] as String, year: jikanInt(json['year']) ?? 0)
           : null,
-      broadcast: json['broadcast'] != null
+      broadcast: broadcast != null
           ? Broadcast(
               dayOfTheWeek:
-                  (json['broadcast']['day'] as String?)?.toLowerCase() ?? '',
-              startTime: json['broadcast']['time'] as String? ?? '',
+                  (broadcast['day'] as String?)?.toLowerCase() ?? '',
+              startTime: broadcast['time'] as String? ?? '',
             )
           : null,
       source: json['source'] as String?,
       averageEpisodeDuration: _parseDuration(json['duration'] as String?),
       rating: json['rating'] as String?,
       studios: (json['studios'] as List<dynamic>?)
-          ?.map((s) => Studio(
-                id: s['mal_id'] as int? ?? 0,
+          ?.whereType<Map>()
+          .map((s) => Studio(
+                id: jikanInt(s['malId'] ?? s['mal_id']) ?? 0,
                 name: s['name'] as String? ?? '',
               ))
           .toList(),
+      serialization: serializations,
     );
   }
 
   static List<Genre> _jikanGenres(List<dynamic>? list) {
     if (list == null) return [];
     return list
+        .whereType<Map>()
         .map((g) => Genre(
-              id: g['mal_id'] as int? ?? 0,
+              id: jikanInt(g['malId'] ?? g['mal_id']) ?? 0,
               name: g['name'] as String? ?? '',
             ))
         .toList();
@@ -781,33 +811,41 @@ class Anime {
     this.nsfw,
   });
 
-  // Factory from Jikan API response
+  // Factory from Jikan (`jikan-edge` or Jikan v4 / Tenrai) API response
   factory Anime.fromJikanJson(Map<String, dynamic> json) {
+    final aired = jikanMap(json['aired'] ?? json['published']);
+    final broadcast = jikanMap(json['broadcast']);
+    final broadcastDay = broadcast?['day'] as String?;
     return Anime(
-      id: json['mal_id'] as int,
-      title: json['title'] as String,
-      imageUrl: json['images']['jpg']['large_image_url'] as String,
-      score: (json['score'] ?? 0.0).toDouble(),
-      members: (json['members'] ?? 0).toInt(),
-      rank: json['rank'] as int?,
-      popularity: json['popularity'] as int?,
+      id: jikanInt(json['malId'] ?? json['mal_id']) ?? 0,
+      title: (json['title'] as String?) ?? '',
+      imageUrl: jikanBestImage(json, preferLarge: true) ?? '',
+      score: jikanDouble(json['score']) ?? 0.0,
+      members: jikanInt(json['members']) ?? 0,
+      rank: jikanInt(json['rank']),
+      popularity: jikanInt(json['popularity']),
       synopsis: json['synopsis'] as String?,
-      numEpisodes: json['episodes'] as int?,
-      startDate: json['aired']['from'] as String?,
-      endDate: json['aired']['to'] as String?,
+      numEpisodes: jikanInt(json['episodes']),
+      numVolumes: jikanInt(json['volumes']),
+      startDate: (aired?['from'] ?? json['startDate']) as String?,
+      endDate: (aired?['to'] ?? json['endDate']) as String?,
       mediaType: json['type'] as String?, // Jikan uses 'type' for mediaType
       status: json['status'] as String?,
-      broadcast: json['broadcast'] != null && json['broadcast']['day'] != null
+      broadcast: broadcastDay != null
           ? Broadcast(
-              dayOfTheWeek: (json['broadcast']['day'] as String).toLowerCase(),
-              startTime: json['broadcast']['time'] as String? ?? '',
+              dayOfTheWeek: broadcastDay.toLowerCase(),
+              startTime: broadcast?['time'] as String? ?? '',
             )
           : null,
       genres: [
         ...(json['genres'] as List<dynamic>? ?? [])
-            .map((g) => g['name'] as String),
+            .whereType<Map>()
+            .map((g) => g['name'] as String? ?? '')
+            .where((n) => n.isNotEmpty),
         ...(json['themes'] as List<dynamic>? ?? [])
-            .map((g) => g['name'] as String),
+            .whereType<Map>()
+            .map((g) => g['name'] as String? ?? '')
+            .where((n) => n.isNotEmpty),
       ],
       nsfw: nsfwFromJikanRating(json['rating'] as String?),
     );

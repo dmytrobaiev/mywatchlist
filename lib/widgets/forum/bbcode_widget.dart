@@ -1,50 +1,17 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:mywatchlist/constants/constants.dart';
+import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/MAL/character_screen.dart';
 import 'package:mywatchlist/screens/MAL/contentdetailedscreen.dart';
-import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/utils/web_launcher.dart';
-import 'package:mywatchlist/widgets/common/app_image.dart';
 import 'package:mywatchlist/widgets/common/image_preview.dart';
 import 'package:mywatchlist/widgets/forum/forum_common.dart';
 
-/// Converts BBCode (already bracket-converted to angle brackets) to HTML
-/// and renders it. Matching DailyAL's BbcodeWidget exactly.
+/// Converts MAL forum BBCode (preserving plain-text brackets like `[1]` or `[edit]`)
+/// into HTML and renders it with [HtmlWidget].
 class BbcodeWidget extends StatelessWidget {
-  static const tagsToReplace = {
-    "<right>": "<div style='text-align: right;'>",
-    "<list>": "<ul>",
-    "<code>": "</div>",
-    "</right>": "</div>",
-    "</list>": "</ul>",
-    "</url>": "</a>",
-    "</color>": "</span>",
-    "</span>": "</span>",
-    "</center>": "</div>",
-    "</img>": "",
-    "<quote>": "<div>",
-    "</quote>": "</div>",
-    "<*>": "</li><li>",
-    "< * >": "</li><li>",
-    "</yt>": "</iframe>",
-    "</code>": "</div>",
-    "<br /><br />": "",
-    "<Level>": "",
-    "<Total Items Needed>": "",
-  };
-
-  static const validTags = [
-    "<color",
-    "<size",
-    "<list",
-    "<url",
-    "<img",
-    "<yt",
-    "<spoiler",
-    "<center",
-  ];
-
   /// Transformed bodies by source text: a post is transformed once, not on every rebuild.
   static final Map<String, String> _transformed = {};
 
@@ -76,6 +43,7 @@ class BbcodeWidget extends StatelessWidget {
     final transformedHtml =
         '<div ${alignCenter ? 'style="text-align:center;"' : ''}>${_transformCached(body)}</div>';
     final theme = Theme.of(context);
+    final maxImageWidth = (MediaQuery.sizeOf(context).width - 80).clamp(160.0, 720.0);
 
     return HtmlWidget(
       transformedHtml,
@@ -149,21 +117,26 @@ class BbcodeWidget extends StatelessWidget {
         return true;
       },
       customWidgetBuilder: (element) {
-        // Handle images: make them tappable and hide in minimize mode
+        // Handle images: render at natural/original dimensions (clamped only by maxWidth),
+        // keeping inline images/badges inline without stretching or forcing full width.
         if (element.localName == 'img') {
           if (minimize) return const SizedBox.shrink();
-          final src = element.attributes['src'];
+          final src = element.attributes['src']?.trim();
           if (src != null && src.isNotEmpty) {
-            return GestureDetector(
+            final img = GestureDetector(
               onTap: () => zoomInImage(context, src),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: AppImage(
-                  url: src,
-                  fit: BoxFit.contain,
-                  errorWidget: (_) => const SizedBox.shrink(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxImageWidth),
+                child: Image(
+                  image: CachedNetworkImageProvider(src),
+                  fit: BoxFit.scaleDown,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
+            );
+            return InlineCustomWidget(
+              alignment: PlaceholderAlignment.middle,
+              child: img,
             );
           }
         }
@@ -187,113 +160,208 @@ class BbcodeWidget extends StatelessWidget {
     );
   }
 
-  /// Port of DailyAL's applyTransform — processes angle-bracket BBCode
-  /// (brackets already converted from [] to <>) into valid HTML.
+  static const Set<String> _knownTags = {
+    'b',
+    'i',
+    'u',
+    's',
+    'center',
+    'right',
+    'color',
+    'size',
+    'url',
+    'img',
+    'spoiler',
+    'quote',
+    'code',
+    'list',
+    '*',
+    'yt',
+    'hr',
+  };
+
+  /// Matches only recognized BBCode tokens (`[tag]`, `[tag=val]`, `[tag attr=val]`, `[/tag]`).
+  /// Plain-text brackets like `[1]`, `[edit]`, or `[Level]` are never matched and stay literal.
+  static final RegExp _bbTokenRe = RegExp(
+    r'\[(/?)(b|i|u|s|center|right|color|size|url|img|spoiler|quote|code|list|\*|yt|hr)(?:(=[^\]]*|\s+[^\]]*))?\]',
+    caseSensitive: false,
+  );
+
+  static final RegExp _brStripRe = RegExp(r'<br\s*/?>', caseSensitive: false);
+
+  /// Token/stack BBCode-to-HTML transformer with per-tag-name matching.
   String applyTransform(String text) {
-    int index = 0;
-    String transformedText = text;
-    var nestedTagStack = <int>[];
-    var replaceContent = <String, String>{};
+    if (text.isEmpty) return '';
+    // Normalize bare newlines when not already using HTML <br> tags.
+    final source = text.replaceAll('\r\n', '\n');
+    final tokens = _bbTokenRe.allMatches(source).toList();
+    if (tokens.isEmpty) return source;
 
-    while (index < text.length) {
-      for (String tag in validTags) {
-        try {
-          String st = "";
-          if ((index + tag.length) < text.length) {
-            st = text.substring(index, index + tag.length).toLowerCase();
-          }
-          String et = "";
-          final closingTag = _getClosingTag(tag);
-          if ((index + closingTag.length) <= text.length) {
-            et = text
-                .substring(index, index + closingTag.length)
-                .toLowerCase();
-          }
-          if (st == tag) {
-            nestedTagStack.add(index);
-          }
-          if (et == closingTag) {
-            if (nestedTagStack.isEmpty) continue;
-            int startIndex = nestedTagStack.removeLast();
-            var tagContent = text.substring(startIndex, index);
-            var tagHeader = tagContent.substring(0, tagContent.indexOf(">"));
-            var newContent = "";
-            var tagValue = "";
-            if (tagHeader.contains("=")) {
-              tagValue = tagContent.substring(
-                  tagContent.indexOf("=") + 1, tagContent.indexOf(">"));
-            }
-            var tagBody = tagContent.substring(tagContent.indexOf(">") + 1);
+    final frames = <_BbFrame>[_BbFrame(tag: '', attr: '', rawOpen: '')];
+    var cursor = 0;
 
-            if (tag == "<color") {
-              newContent = "<span style='color: $tagValue;'>$tagBody";
-            } else if (tag == "<size") {
-              var sizeValue = int.tryParse(tagValue);
-              if (sizeValue != null && sizeValue >= 130) {
-                newContent = "<span style='font-size: 130%;'>$tagBody";
-              } else {
-                newContent = "<span style='font-size: $tagValue%;'>$tagBody";
-              }
-            } else if (tag == "<list") {
-              if (tagValue.isNotEmpty) {
-                newContent = "<ol type='$tagValue'>$tagBody";
-              } else {
-                newContent = "<ul>$tagBody";
-              }
-              newContent = newContent
-                  .replaceFirst("<*>", "<li>")
-                  .replaceFirst("< * >", "<li>");
-            } else if (tag == "<url") {
-              newContent = "<a style='' href='$tagValue'>$tagBody";
-            } else if (tag == "<img") {
-              newContent =
-                  "<img src='$tagBody' style='vertical-align: $tagValue;' />";
-            } else if (tag == "<spoiler") {
-              newContent =
-                  "<spoiler ${tagValue.isEmpty ? '' : "name='$tagValue'"}>$tagBody";
-            } else if (tag == "<center") {
-              newContent = "<div style='text-align: center;'>$tagBody";
-            } else if (tag == "<yt") {
-              newContent = """
-              <div style='text-align: center;'>
-                <iframe height="315"
-                src="http://www.youtube.com/embed/$tagBody?autoplay=1">
-              </div>
-              """;
-            }
+    void writeText(String chunk) {
+      if (chunk.isEmpty) return;
+      frames.last.buf.write(chunk);
+    }
 
-            replaceContent[tagContent] = newContent;
+    for (final match in tokens) {
+      writeText(source.substring(cursor, match.start));
+      cursor = match.end;
 
-            if (nestedTagStack.isEmpty) {
-              for (var tc in replaceContent.keys.toList().reversed) {
-                transformedText =
-                    transformedText.replaceAll(tc, replaceContent[tc]!);
-              }
-              replaceContent.clear();
-            }
-          }
-        } catch (e) {
-          debugPrint('BbcodeWidget transform error: $e');
-        }
+      final isClosing = match.group(1) == '/';
+      final tag = match.group(2)!.toLowerCase();
+      final rawAttr = match.group(3) ?? '';
+      final rawToken = match.group(0)!;
+
+      if (!_knownTags.contains(tag)) {
+        writeText(rawToken);
+        continue;
       }
-      index++;
+
+      // Self-closing tags
+      if (tag == 'hr' && !isClosing) {
+        writeText('<hr />');
+        continue;
+      }
+      if (tag == '*' && !isClosing) {
+        // Only treat [*] as a list item marker inside an open [list].
+        final inList = frames.any((f) => f.tag == 'list');
+        if (inList) {
+          writeText('<!--BB_LI-->');
+        } else {
+          writeText(rawToken);
+        }
+        continue;
+      }
+
+      if (!isClosing) {
+        frames.add(_BbFrame(tag: tag, attr: rawAttr.trim(), rawOpen: rawToken));
+      } else {
+        // Find the nearest matching open tag of the same name.
+        final idx = frames.lastIndexWhere((f) => f.tag == tag);
+        if (idx <= 0) {
+          // Unmatched closing tag — ignore stray [/tag] cleanly.
+          continue;
+        }
+        // Flush any unclosed inner frames back as literal text.
+        while (frames.length - 1 > idx) {
+          final orphan = frames.removeLast();
+          frames.last.buf
+            ..write(orphan.rawOpen)
+            ..write(orphan.buf);
+        }
+        final frame = frames.removeLast();
+        frames.last.buf.write(_renderTag(frame.tag, frame.attr, frame.buf.toString()));
+      }
     }
 
-    transformedText = _replaceBBTags(transformedText);
-    return transformedText;
-  }
+    writeText(source.substring(cursor));
 
-  String _replaceBBTags(String text) {
-    for (String tag in tagsToReplace.keys) {
-      text = text.replaceAll(tag, tagsToReplace[tag]!);
-      text = text.replaceAll(tag.toUpperCase(), tagsToReplace[tag]!);
+    // Any remaining unclosed tags stay literal so no user text is ever lost.
+    while (frames.length > 1) {
+      final orphan = frames.removeLast();
+      frames.last.buf
+        ..write(orphan.rawOpen)
+        ..write(orphan.buf);
     }
-    return text;
+
+    return frames.first.buf.toString();
   }
 
-  static String _getClosingTag(String tag) {
-    return "</${tag.substring(1)}>";
+  static String _attrValue(String attr) {
+    final trimmed = attr.trim();
+    if (!trimmed.startsWith('=')) return '';
+    var val = trimmed.substring(1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))) {
+      if (val.length >= 2) val = val.substring(1, val.length - 1);
+    }
+    return val.trim();
   }
+
+  static String _escapeAttr(String value) => value
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+
+  static String _renderTag(String tag, String attr, String inner) {
+    final val = _attrValue(attr);
+    switch (tag) {
+      case 'b':
+        return '<b>$inner</b>';
+      case 'i':
+        return '<i>$inner</i>';
+      case 'u':
+        return '<u>$inner</u>';
+      case 's':
+        return '<s>$inner</s>';
+      case 'center':
+        return '<div style="text-align: center;">$inner</div>';
+      case 'right':
+        return '<div style="text-align: right;">$inner</div>';
+      case 'color':
+        if (val.isEmpty) return inner;
+        return '<span style="color: ${_escapeAttr(val)};">$inner</span>';
+      case 'size':
+        final size = int.tryParse(val);
+        if (size == null || size <= 0) return inner;
+        final clamped = size >= 130 ? 130 : size;
+        return '<span style="font-size: $clamped%;">$inner</span>';
+      case 'url':
+        final href = (val.isNotEmpty ? val : inner)
+            .replaceAll(_brStripRe, '')
+            .trim();
+        final label = inner.trim().isEmpty ? href : inner;
+        if (href.isEmpty) return label;
+        return '<a href="${_escapeAttr(href)}">$label</a>';
+      case 'img':
+        final src = inner.replaceAll(_brStripRe, '').replaceAll(RegExp(r'\s+'), '').trim();
+        if (src.isEmpty) return '';
+        return '<img src="${_escapeAttr(src)}" />';
+      case 'spoiler':
+        final nameAttr = val.isEmpty ? '' : ' name="${_escapeAttr(val)}"';
+        return '<spoiler$nameAttr>$inner</spoiler>';
+      case 'quote':
+        return '<blockquote>$inner</blockquote>';
+      case 'code':
+        return '<pre><code>$inner</code></pre>';
+      case 'list':
+        final parts = inner.split('<!--BB_LI-->');
+        final items = StringBuffer();
+        for (var i = 0; i < parts.length; i++) {
+          final item = parts[i]
+              .replaceAll(RegExp(r'^(?:\s*<br\s*/?>\s*)+|(?:\s*<br\s*/?>\s*)+$', caseSensitive: false), '')
+              .trim();
+          if (i == 0 && item.isEmpty) continue;
+          if (item.isNotEmpty) items.write('<li>$item</li>');
+        }
+        final listTag = val.isNotEmpty ? 'ol type="${_escapeAttr(val)}"' : 'ul';
+        final closeTag = val.isNotEmpty ? 'ol' : 'ul';
+        return '<$listTag>$items</$closeTag>';
+      case 'yt':
+        final vid = inner.replaceAll(_brStripRe, '').trim();
+        if (vid.isEmpty) return '';
+        return '<div style="text-align: center;"><iframe height="315" src="https://www.youtube.com/embed/${_escapeAttr(vid)}"></iframe></div>';
+      default:
+        return inner;
+    }
+  }
+}
+
+class _BbFrame {
+  final String tag;
+  final String attr;
+  final String rawOpen;
+  final StringBuffer buf = StringBuffer();
+
+  _BbFrame({
+    required this.tag,
+    required this.attr,
+    required this.rawOpen,
+  });
 }
 
 /// Spoiler widget with reveal toggle.
@@ -313,30 +381,42 @@ class _SpoilerWidget extends StatefulWidget {
 }
 
 class _SpoilerWidgetState extends State<_SpoilerWidget> {
-  bool _isRevealed = false;
+  bool _revealed = false;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        TextButton.icon(
-          onPressed: () => setState(() => _isRevealed = !_isRevealed),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          ),
           icon: Icon(
-            _isRevealed ? Icons.visibility_off : Icons.visibility,
+            _revealed ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             size: 16,
           ),
           label: Text(
-            _isRevealed
-                ? S.current.Fc_Spoiler_Hide(widget.name)
-                : S.current.Fc_Spoiler_Show(widget.name),
+            _revealed ? '${S.current.Hide} ${widget.name}' : widget.name,
             style: const TextStyle(fontSize: 12),
           ),
+          onPressed: () => setState(() => _revealed = !_revealed),
         ),
-        if (_isRevealed)
-          BbcodeWidget(
-            body: widget.content,
-            color: widget.color,
+        if (_revealed)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: BbcodeWidget(
+              body: widget.content,
+              color: widget.color,
+            ),
           ),
       ],
     );

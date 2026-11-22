@@ -612,10 +612,13 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
           caption,
           NumberBar(
             key: const ValueKey('edit-episode-bar'),
-            first: 1,
-            count: pickerCount,
-            selected: entry.progress == 0 ? null : entry.progress,
+            first: 0,
+            count: pickerCount + 1,
+            selected: entry.progress,
             busy: _busy.contains(EditField.progress),
+            semanticLabel: (v) => v == 0 ? '0' : '$v',
+            labelBuilder: (context, v) =>
+                v == 0 ? const Icon(Icons.block) : Text('$v'),
             onSelected: _changeProgress,
           ),
         ],
@@ -843,6 +846,8 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
                 busy: _busy.contains(EditField.startDate),
                 onPicked: (d) => _send(EditField.startDate,
                     EntryPatch(startDate: formatApiDate(d))),
+                onCleared: () => _send(EditField.startDate,
+                    const EntryPatch(clearStartDate: true)),
               ),
             ),
             const SizedBox(width: 12),
@@ -854,6 +859,8 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
                 busy: _busy.contains(EditField.finishDate),
                 onPicked: (d) => _send(EditField.finishDate,
                     EntryPatch(finishDate: formatApiDate(d))),
+                onCleared: () => _send(EditField.finishDate,
+                    const EntryPatch(clearFinishDate: true)),
               ),
             ),
           ],
@@ -929,27 +936,24 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 4, 12, 12),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Flexible(
-            child: TextButton.icon(
-              onPressed: _toggleAdvanced,
-              icon: AnimatedRotation(
-                turns: _advanced ? 0.5 : 0,
-                duration: const Duration(milliseconds: 200),
-                curve: editEaseOut,
-                child: const Icon(Icons.expand_less),
-              ),
-              label: Text(
-                _advanced
-                    ? S.current.Edit_Fewer_Options
-                    : S.current.Edit_More_Options,
-                overflow: TextOverflow.ellipsis,
-              ),
+          TextButton.icon(
+            onPressed: _toggleAdvanced,
+            icon: AnimatedRotation(
+              turns: _advanced ? 0.5 : 0,
+              duration: const Duration(milliseconds: 200),
+              curve: editEaseOut,
+              child: const Icon(Icons.expand_less),
+            ),
+            label: Text(
+              _advanced
+                  ? S.current.Edit_Fewer_Options
+                  : S.current.Edit_More_Options,
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           Flexible(
-            flex: 2,
             child: FilledButton.tonalIcon(
               style: FilledButton.styleFrom(
                 backgroundColor: scheme.errorContainer,

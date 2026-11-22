@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:mywatchlist/constants/constants.dart' show TabType, gotoPage;
 import 'package:mywatchlist/screens/MAL/characters_staff_screen.dart';
 import 'package:mywatchlist/screens/MAL/detail/detail_data.dart';
@@ -11,20 +12,25 @@ DetailSection? charactersSection(DetailData data) {
       ? data.mangaCharacters.isEmpty
       : data.charactersVoiceActors.isEmpty;
   if (empty) return null;
+  void openAll(BuildContext context) => gotoPage(
+        context: context,
+        newPage: CharactersStaffScreen(id: data.id, category: data.category),
+      );
   return DetailSection(
     TabType.Characters,
-    data.isManga
-        ? AnimeCharacterWidget(
-            mangaCharacterList: data.mangaCharacters,
-            horizPadding: detailHorizPadding,
-          )
-        : AnimeCharacterWidget(
-            animeCharacterList: data.charactersVoiceActors,
-            horizPadding: detailHorizPadding,
-          ),
-    onViewAll: (context) => gotoPage(
-      context: context,
-      newPage: CharactersStaffScreen(id: data.id, category: data.category),
+    Builder(
+      builder: (context) => data.isManga
+          ? AnimeCharacterWidget(
+              mangaCharacterList: data.mangaCharacters,
+              horizPadding: detailHorizPadding,
+              onViewAll: () => openAll(context),
+            )
+          : AnimeCharacterWidget(
+              animeCharacterList: data.charactersVoiceActors,
+              horizPadding: detailHorizPadding,
+              onViewAll: () => openAll(context),
+            ),
     ),
+    onViewAll: openAll,
   );
 }

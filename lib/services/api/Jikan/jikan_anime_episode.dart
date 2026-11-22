@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class AnimeEpisode {
   final int? malId;
   final String? url;
@@ -25,16 +27,16 @@ class AnimeEpisode {
 
   factory AnimeEpisode.fromJson(Map<String, dynamic> json) {
     return AnimeEpisode(
-      malId: json['mal_id'],
-      url: json['url'],
-      title: json['title'],
-      titleJapanese: json['title_japanese'],
-      titleRomanji: json['title_romanji'],
-      duration: json['duration'],
-      aired: json['aired'],
-      filler: json['filler'],
-      recap: json['recap'],
-      forumUrl: json['forum_url'],
+      malId: jikanInt(json['malId'] ?? json['mal_id'] ?? json['number']),
+      url: json['url'] as String?,
+      title: json['title'] as String?,
+      titleJapanese: (json['titleJapanese'] ?? json['title_japanese']) as String?,
+      titleRomanji: (json['titleRomanji'] ?? json['title_romanji']) as String?,
+      duration: jikanInt(json['duration']),
+      aired: json['aired'] as String?,
+      filler: json['filler'] as bool?,
+      recap: json['recap'] as bool?,
+      forumUrl: (json['forumUrl'] ?? json['forum_url']) as String?,
     );
   }
 }
@@ -48,10 +50,11 @@ class Pagination {
     this.hasNextPage,
   });
 
-  factory Pagination.fromJson(Map<String, dynamic> json) {
+  factory Pagination.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return Pagination(hasNextPage: false);
     return Pagination(
-      lastVisiblePage: json['last_visible_page'],
-      hasNextPage: json['has_next_page'],
+      lastVisiblePage: jikanLastVisiblePage(json),
+      hasNextPage: jikanHasNextPage(json),
     );
   }
 }
@@ -67,8 +70,11 @@ class AnimeEpisodesResponse {
 
   factory AnimeEpisodesResponse.fromJson(Map<String, dynamic> json) {
     return AnimeEpisodesResponse(
-      data: (json['data'] as List).map((e) => AnimeEpisode.fromJson(e)).toList(),
-      pagination: Pagination.fromJson(json['pagination']),
+      data: ((json['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => AnimeEpisode.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      pagination: Pagination.fromJson(jikanPagination(json)),
     );
   }
 }

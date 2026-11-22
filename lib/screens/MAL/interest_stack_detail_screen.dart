@@ -236,16 +236,23 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
           return Stack(
             fit: StackFit.expand,
             children: [
-              Padding(
-                padding: EdgeInsets.only(top: kToolbarHeight + MediaQuery.paddingOf(context).top, bottom: 8),
-                child: Row(
-                  children: [
-                    SB.w20,
-                    Expanded(child: _titleWidget(context)),
-                    SB.w20,
-                    _picturesWidget(context),
-                    SB.w20,
-                  ],
+              FlexibleSpaceBar(
+                collapseMode: CollapseMode.pin,
+                background: Padding(
+                  padding: EdgeInsets.only(
+                    top: kToolbarHeight + MediaQuery.paddingOf(context).top,
+                    bottom: 8,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SB.w20,
+                      Expanded(child: _titleWidget(context)),
+                      SB.w20,
+                      _picturesWidget(context),
+                      SB.w20,
+                    ],
+                  ),
                 ),
               ),
               Positioned(
@@ -303,6 +310,7 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
   Widget _titleWidget(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
@@ -377,13 +385,18 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
 
   // --- Tab bar ---
 
-  /// Scrollable tabs, each label on a single line.
+  /// Pinned scrollable tabs beneath the collapsed app bar.
   Widget _tabBarSliver() {
-    return SliverToBoxAdapter(
-      child: TabBar(
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        tabs: [for (final e in _tabs) Tab(text: e)],
+    final scheme = Theme.of(context).colorScheme;
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _PinnedTabBarDelegate(
+        backgroundColor: scheme.surface,
+        tabBar: TabBar(
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [for (final e in _tabs) Tab(text: e)],
+        ),
       ),
     );
   }
@@ -949,4 +962,33 @@ class StackEntryTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PinnedTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+  final Color backgroundColor;
+
+  const _PinnedTabBarDelegate({
+    required this.tabBar,
+    required this.backgroundColor,
+  });
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Material(
+      color: backgroundColor,
+      elevation: overlapsContent ? 1 : 0,
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedTabBarDelegate oldDelegate) =>
+      oldDelegate.tabBar != tabBar || oldDelegate.backgroundColor != backgroundColor;
 }

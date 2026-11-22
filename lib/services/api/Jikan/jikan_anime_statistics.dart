@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class AnimeStatistics {
   final int? watching;
   final int? completed;
@@ -18,15 +20,23 @@ class AnimeStatistics {
   });
 
   factory AnimeStatistics.fromJson(Map<String, dynamic> json) {
+    final status = jikanMap(json['status']) ?? json;
     return AnimeStatistics(
-      watching: json['watching'],
-      completed: json['completed'],
-      onHold: json['on_hold'],
-      dropped: json['dropped'],
-      planToWatch: json['plan_to_watch'],
-      total: json['total'],
-      scores: json['scores'] != null
-          ? (json['scores'] as List).map((e) => ScoreStatistics.fromJson(e)).toList()
+      watching: jikanInt(
+        status['inProgress'] ?? status['watching'] ?? status['reading'],
+      ),
+      completed: jikanInt(status['completed']),
+      onHold: jikanInt(status['onHold'] ?? status['on_hold']),
+      dropped: jikanInt(status['dropped']),
+      planToWatch: jikanInt(
+        status['planned'] ?? status['plan_to_watch'] ?? status['plan_to_read'],
+      ),
+      total: jikanInt(status['total']),
+      scores: json['scores'] is List
+          ? (json['scores'] as List)
+              .whereType<Map>()
+              .map((e) => ScoreStatistics.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
           : null,
     );
   }
@@ -45,9 +55,9 @@ class ScoreStatistics {
 
   factory ScoreStatistics.fromJson(Map<String, dynamic> json) {
     return ScoreStatistics(
-      score: json['score'],
-      votes: json['votes'],
-      percentage: (json['percentage'] as num?)?.toDouble(),
+      score: jikanInt(json['score']),
+      votes: jikanInt(json['votes']),
+      percentage: jikanDouble(json['percentage']),
     );
   }
 }

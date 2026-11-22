@@ -125,14 +125,14 @@ class Constants {
 
   static const String malclientHeader = 'X-MAL-CLIENT-ID';
 
-  static const String jikanV4 = "https://api.jikan.moe/v4";
-  static const String jikanV4anime = "https://api.jikan.moe/v4/anime";
+  static const String jikanV4 = "https://jikan.lucashdo.com/v1";
+  static const String jikanV4anime = "https://jikan.lucashdo.com/v1/anime";
   static const String jikanSeasonGetNow =
-      "https://api.jikan.moe/v4/seasons/now";
+      "https://jikan.lucashdo.com/v1/seasons/now";
   static const String jikanSeasonUpcoming =
-      "https://api.jikan.moe/v4/seasons/upcoming";
-  static const String jikanTopAnime = "https://api.jikan.moe/v4/top/anime";
-  static const String jikanTopManga = "https://api.jikan.moe/v4/top/manga";
+      "https://jikan.lucashdo.com/v1/seasons/upcoming";
+  static const String jikanTopAnime = "https://jikan.lucashdo.com/v1/top/anime";
+  static const String jikanTopManga = "https://jikan.lucashdo.com/v1/top/manga";
 
   static const String malAnimeFields =
       'id,title,main_picture,alternative_titles,ending_themes,opening_themes,start_date,end_date,synopsis,mean,rank,popularity,num_list_users,num_scoring_users,nsfw,created_at,updated_at,media_type,status,genres,my_list_status{status,score,num_episodes_watched,is_rewatching,updated_at,priority,num_times_rewatched,rewatch_value,start_date,finish_date,tags,comments},num_episodes,start_season,broadcast,source,average_episode_duration,rating,pictures,background,related_anime{my_list_status,mean,num_list_users,media_type},related_manga{my_list_status,mean,num_list_users,media_type},recommendations{my_list_status,mean,num_list_users,media_type},studios,statistics';
@@ -652,7 +652,7 @@ Widget loadingText(BuildContext context) {
 
 Widget genresWidget(List<Genre> genres, String category, BuildContext context,
     {TextAlign textAlign = TextAlign.center}) {
-  plainButtonBuild(Genre e, [String additional = '']) => PlainButton(
+  plainButtonBuild(Genre e) => PlainButton(
         onPressed: () => onGenrePress(e, category, context),
         padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 5),
         child: Text(
@@ -660,32 +660,26 @@ Widget genresWidget(List<Genre> genres, String category, BuildContext context,
           style: const TextStyle(fontSize: 12.0),
         ),
       );
-  final length = genres.length;
-  return RichText(
-    textAlign: textAlign,
-    text: TextSpan(
-        children: genres.asMap().entries.map((e) {
-      return TextSpan(
-        children: [
-          WidgetSpan(
-              child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: plainButtonBuild(e.value),
-          )),
-          if (length != (e.key + 1))
-            WidgetSpan(
-              child: SizedBox(
-                width: 10.0,
-                child: PlainButton(
-                  onPressed: () {},
-                  padding: EdgeInsets.zero,
-                  child: const Text('·'),
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < genres.length; i++) ...[
+          if (i > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                '·',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
+          plainButtonBuild(genres[i]),
         ],
-      );
-    }).toList()),
+      ],
+    ),
   );
 }
 

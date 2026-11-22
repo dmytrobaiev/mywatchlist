@@ -57,9 +57,11 @@ void main() {
   test('the ONA ranking goes to Jikan with type=ona and maps to a SearchResult', () async {
     final result = await MalApi.getContentRankingResult(RankingType.ONA, limit: 25);
     expect(requests, hasLength(1));
-    expect(requests.single.host, 'api.jikan.moe');
-    expect(requests.single.path, '/v4/top/anime');
+    expect(requests.single.host, 'jikan.lucashdo.com');
+    expect(requests.single.path, '/v1/anime');
     expect(requests.single.queryParameters['type'], 'ona');
+    expect(requests.single.queryParameters['order_by'], 'score');
+    expect(requests.single.queryParameters['sort'], 'desc');
     expect(requests.single.toString(), isNot(contains('ranking_type')));
     expect(result.data.single.id, 10);
     expect(result.data.single.title, 'ONA 1');

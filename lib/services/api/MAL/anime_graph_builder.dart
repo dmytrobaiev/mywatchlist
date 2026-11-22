@@ -220,45 +220,82 @@ class _Walk {
   List<_Edge> unvisited(List<_Edge> list) =>
       [for (final e in list) if (!nodes.containsKey(e.target)) e];
 
-  /// `get_related_anime_with_graph`.
+  /// `get_related_anime_with_graph`: separates BFS node discovery from edge
+  /// retention so cross-edges between nodes in the same ring or pointing back
+  /// to already-discovered nodes are never dropped.
   Future<void> visit(int id, {required bool includeOthers}) async {
-    final anime = await fetch(id);
-    if (anime == null) return;
-    addNode(anime);
+    final root = await fetch(id);
+    if (root == null) return;
+    addNode(root);
 
-    final ring = unvisited(edgesOf(id, anime, includeOthers: includeOthers));
+    final rawEdges = <_Edge>[];
+    final expanded = <int>{id};
+    final queued = <int>{id};
+    final frontier = <int>[];
 
-    // Neighbours fetched [concurrency] at a time; results kept in the ring's order so the
-    // graph does not depend on which answer came first.
-    final neighbours = List<Map<String, dynamic>?>.filled(ring.length, null);
-    var next = 0;
-    Future<void> worker() async {
-      while (next < ring.length) {
-        final i = next++;
-        neighbours[i] = await fetch(ring[i].target);
+    void collectFrom(int nodeId, Map<String, dynamic> data, {required bool others}) {
+      for (final edge in edgesOf(nodeId, data, includeOthers: others)) {
+        rawEdges.add(edge);
+        if (queued.add(edge.target)) {
+          frontier.add(edge.target);
+        }
       }
     }
 
-    await Future.wait(
-        [for (var w = 0; w < builder.concurrency && w < ring.length; w++) worker()]);
+    collectFrom(id, root, others: includeOthers);
 
-    final combined = <_Edge>[];
-    for (var i = 0; i < ring.length; i++) {
-      final neighbour = neighbours[i];
-      if (neighbour == null) continue;
-      combined
-          .addAll(edgesOf(ring[i].target, neighbour, includeOthers: false));
-    }
-    edges.addAll(ring);
-    for (final neighbour in neighbours) {
-      if (neighbour != null) addNode(neighbour);
+    while (frontier.isNotEmpty) {
+      final batchIds = List<int>.of(frontier);
+      frontier.clear();
+      final fetched = List<Map<String, dynamic>?>.filled(batchIds.length, null);
+      var next = 0;
+      Future<void> worker() async {
+        while (next < batchIds.length) {
+          final i = next++;
+          fetched[i] = await fetch(batchIds[i]);
+        }
+      }
+
+      await Future.wait([
+        for (var w = 0; w < builder.concurrency && w < batchIds.length; w++) worker(),
+      ]);
+
+      for (var i = 0; i < batchIds.length; i++) {
+        final data = fetched[i];
+        if (data == null) continue;
+        final nodeId = batchIds[i];
+        addNode(data);
+        if (expanded.add(nodeId)) {
+          collectFrom(nodeId, data, others: false);
+        }
+      }
     }
 
-    for (final edge in unvisited(combined)) {
-      edges.add(edge);
-      await visit(edge.target, includeOthers: false);
+    // Keep every valid edge whose endpoints are both in `nodes`, deduplicating
+    // inverse pairs between `{u, v}` while prioritizing `sequel`/`prequel`.
+    final byPair = <(int, int), _Edge>{};
+    for (final e in rawEdges) {
+      if (e.source == e.target) continue;
+      if (!nodes.containsKey(e.source) || !nodes.containsKey(e.target)) continue;
+      final pair = e.source < e.target ? (e.source, e.target) : (e.target, e.source);
+      final existing = byPair[pair];
+      if (existing == null || _relationPriority(e.relation) < _relationPriority(existing.relation)) {
+        byPair[pair] = e;
+      }
     }
+    edges.addAll(byPair.values);
   }
+
+  static int _relationPriority(String relation) => switch (relation) {
+        'sequel' => 0,
+        'prequel' => 1,
+        'parent_story' => 2,
+        'side_story' => 3,
+        'full_story' => 4,
+        'summary' => 5,
+        'spin_off' => 6,
+        _ => 7,
+      };
 
   /// The node fields of mwl-rust-api's `ContentNodeDTO`. A manga's `start_date`
   /// (`2010-04-07`, `2010`) becomes a `start_season` so both kinds sort the same way.

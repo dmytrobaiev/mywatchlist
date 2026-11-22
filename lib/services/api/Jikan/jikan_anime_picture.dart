@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class Images {
   final ImageFormat? jpg;
   final ImageFormat? webp;
@@ -5,9 +7,26 @@ class Images {
   Images({this.jpg, this.webp});
 
   factory Images.fromJson(Map<String, dynamic> json) {
+    if (json['jpg'] != null || json['webp'] != null) {
+      return Images(
+        jpg: jikanMap(json['jpg']) != null
+            ? ImageFormat.fromJson(jikanMap(json['jpg'])!)
+            : null,
+        webp: jikanMap(json['webp']) != null
+            ? ImageFormat.fromJson(jikanMap(json['webp'])!)
+            : null,
+      );
+    }
+    final sizes = jikanImageSizes(
+      json,
+      fallbackImageUrl: jikanStr(json['imageUrl'] ?? json['image_url']),
+    );
     return Images(
-      jpg: json['jpg'] != null ? ImageFormat.fromJson(json['jpg']) : null,
-      webp: json['webp'] != null ? ImageFormat.fromJson(json['webp']) : null,
+      jpg: ImageFormat(
+        imageUrl: sizes.medium ?? sizes.large ?? sizes.small,
+        smallImageUrl: sizes.small,
+        largeImageUrl: sizes.large ?? sizes.medium,
+      ),
     );
   }
 }
@@ -21,9 +40,11 @@ class ImageFormat {
 
   factory ImageFormat.fromJson(Map<String, dynamic> json) {
     return ImageFormat(
-      imageUrl: json['image_url'],
-      smallImageUrl: json['small_image_url'],
-      largeImageUrl: json['large_image_url'],
+      imageUrl: jikanStr(json['image_url'] ?? json['imageUrl'] ?? json['medium']),
+      smallImageUrl: jikanStr(
+          json['small_image_url'] ?? json['thumbnailUrl'] ?? json['small']),
+      largeImageUrl: jikanStr(
+          json['large_image_url'] ?? json['imageUrl'] ?? json['large']),
     );
   }
 }
@@ -35,7 +56,10 @@ class AnimePicturesResponse {
 
   factory AnimePicturesResponse.fromJson(Map<String, dynamic> json) {
     return AnimePicturesResponse(
-      data: (json['data'] as List).map((e) => Images.fromJson(e)).toList(),
+      data: ((json['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Images.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
     );
   }
 }

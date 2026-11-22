@@ -16,6 +16,7 @@ import 'package:mywatchlist/services/api/Jikan/jikan_animeuserupdate.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_characterfull.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_fallbacks.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_genre.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_personfull.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_producer.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_producerfull.dart';
@@ -222,12 +223,20 @@ class JikanApi {
   Future<List<Anime>> getSeasonNow(
       {String filter = 'tv', int limit = 25}) async {
     const String baseUrl = Constants.jikanSeasonGetNow;
-    final response = await JikanClient.instance
-        .get(Uri.parse('$baseUrl?filter=$filter&limit=$limit'));
+    final response = await JikanClient.instance.get(Uri.parse(baseUrl));
 
     if (response.statusCode == 200) {
-      var data = json.decode(response.body)['data'] as List<dynamic>;
-      return data.map((anime) => Anime.fromJikanJson(anime)).toList();
+      var data = (json.decode(response.body)['data'] as List<dynamic>? ?? const []);
+      var list = data
+          .whereType<Map>()
+          .map((anime) => Anime.fromJikanJson(Map<String, dynamic>.from(anime)))
+          .toList();
+      if (filter.isNotEmpty) {
+        final f = filter.toLowerCase();
+        final filtered = list.where((a) => (a.mediaType ?? '').toLowerCase() == f).toList();
+        if (filtered.isNotEmpty) list = filtered;
+      }
+      return limit > 0 ? list.take(limit).toList() : list;
     } else {
       throw Exception('Failed to load current season data');
     }
@@ -236,46 +245,78 @@ class JikanApi {
   Future<List<Anime>> getSeasonUpcoming(
       {String filter = 'tv', int limit = 25}) async {
     const String baseUrl = Constants.jikanSeasonUpcoming;
-    final response = await JikanClient.instance
-        .get(Uri.parse('$baseUrl?filter=$filter&limit=$limit'));
+    final response = await JikanClient.instance.get(Uri.parse(baseUrl));
 
     if (response.statusCode == 200) {
-      var data = json.decode(response.body)['data'] as List<dynamic>;
-      return data.map((anime) => Anime.fromJikanJson(anime)).toList();
+      var data = (json.decode(response.body)['data'] as List<dynamic>? ?? const []);
+      var list = data
+          .whereType<Map>()
+          .map((anime) => Anime.fromJikanJson(Map<String, dynamic>.from(anime)))
+          .toList();
+      if (filter.isNotEmpty) {
+        final f = filter.toLowerCase();
+        final filtered = list.where((a) => (a.mediaType ?? '').toLowerCase() == f).toList();
+        if (filtered.isNotEmpty) list = filtered;
+      }
+      return limit > 0 ? list.take(limit).toList() : list;
     } else {
       throw Exception('Failed to load current season data');
     }
   }
+
+  static const Set<String> _validTopAnimeFilters = {
+    'airing',
+    'upcoming',
+    'bypopularity',
+    'favorite',
+  };
+
+  static const Set<String> _validTopMangaFilters = {
+    'publishing',
+    'upcoming',
+    'bypopularity',
+    'favorite',
+  };
 
   Future<List<Anime>> getTopAnime(
       {String type = 'tv', required String filter, int limit = 25}) async {
     const String baseUrl = Constants.jikanTopAnime;
-    final response = await JikanClient.instance
-        .get(Uri.parse('$baseUrl?type=$type&filter=$filter&limit=$limit'));
+    final uri = _validTopAnimeFilters.contains(filter)
+        ? Uri.parse('$baseUrl?filter=$filter')
+        : Uri.parse(baseUrl);
+    final response = await JikanClient.instance.get(uri);
 
     if (response.statusCode == 200) {
-      var data = json.decode(response.body)['data'] as List<dynamic>;
-      return data.map((anime) => Anime.fromJikanJson(anime)).toList();
+      var data = (json.decode(response.body)['data'] as List<dynamic>? ?? const []);
+      var list = data
+          .whereType<Map>()
+          .map((anime) => Anime.fromJikanJson(Map<String, dynamic>.from(anime)))
+          .toList();
+      if (type.isNotEmpty) {
+        final t = type.toLowerCase();
+        final filtered = list.where((a) => (a.mediaType ?? '').toLowerCase() == t).toList();
+        if (filtered.isNotEmpty) list = filtered;
+      }
+      return limit > 0 ? list.take(limit).toList() : list;
     } else {
       throw Exception('Failed to load current season data');
     }
   }
 
-  /// Largest page Jikan's `/top/anime` serves.
-  static const int topPageSize = 25;
+  /// Largest page `jikan-edge`'s anime search/ranking serves (50; Tenrai serves 25).
+  static const int topPageSize = 50;
 
-  /// `GET /top/anime?type=&limit=&page=`, with `sfw=true` when adult entries are left out
-  /// (Jikan reads the flag; it is not sent otherwise).
+  /// `GET /v1/anime?type=<type>&order_by=score&sort=desc&page=<page>`
+  /// (`jikan-edge`'s `/top/anime` does not accept `type`, `limit`, or `sfw`).
   static Uri topAnimeUrl({required String type, required int limit, required int page, bool sfw = false}) =>
-      Uri.parse('${Constants.jikanTopAnime}?type=$type&limit=$limit&page=$page${sfw ? '&sfw=true' : ''}');
+      Uri.parse('${Constants.jikanV4anime}?type=$type&order_by=score&sort=desc&page=$page');
 
-  /// One page of `GET /top/anime?type=` as a [SearchResult] (the shape of a MAL
-  /// ranking), paged by [offset] (offset ~/ limit + 1). `paging.next` is the
-  /// Jikan URL of the following page, loaded by `MalApi.getContentListPage`.
+  /// One page of top anime by [type] as a [SearchResult] (the shape of a MAL
+  /// ranking), paged by [offset]. `paging.next` is the URL of the following
+  /// page, loaded by `MalApi.getContentListPage`.
   /// Goes through [JikanClient], so Tenrai answers when Jikan is down.
   ///
-  /// [sfw] leaves out the adult entries (Rx), as MAL's `nsfw=0` does for its own rankings;
-  /// the next page keeps the choice.
+  /// [sfw] filters out adult entries (`Rx`) client-side (`jikan-edge` refuses `sfw=true`).
   Future<SearchResult> getTopAnimeResult({
     required String type,
     int limit = topPageSize,
@@ -290,11 +331,14 @@ class JikanApi {
       throw Exception('Failed to load top anime ($type)');
     }
     final body = json.decode(response.body) as Map<String, dynamic>;
-    final data = (body['data'] as List<dynamic>? ?? [])
-        .map((a) => Anime.fromJikanJson(a as Map<String, dynamic>))
+    var data = (body['data'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((a) => Anime.fromJikanJson(Map<String, dynamic>.from(a)))
         .toList();
-    final hasNext =
-        (body['pagination'] as Map<String, dynamic>?)?['has_next_page'] == true;
+    if (sfw) {
+      data = data.where((a) => !a.isAdult).toList();
+    }
+    final hasNext = jikanHasNextPage(jikanPagination(body)) == true;
     final next = topAnimeUrl(type: type, limit: size, page: page + 1, sfw: sfw);
     return SearchResult(
       data: data,
@@ -308,12 +352,23 @@ class JikanApi {
       String filter = 'favorite',
       int limit = 25}) async {
     const String baseUrl = Constants.jikanTopManga;
-    final response = await JikanClient.instance
-        .get(Uri.parse('$baseUrl?type=$type&filter=$filter&limit=$limit'));
+    final uri = _validTopMangaFilters.contains(filter)
+        ? Uri.parse('$baseUrl?filter=$filter')
+        : Uri.parse(baseUrl);
+    final response = await JikanClient.instance.get(uri);
 
     if (response.statusCode == 200) {
-      var data = json.decode(response.body)['data'] as List<dynamic>;
-      return data.map((anime) => Anime.fromJikanJson(anime)).toList();
+      var data = (json.decode(response.body)['data'] as List<dynamic>? ?? const []);
+      var list = data
+          .whereType<Map>()
+          .map((anime) => Anime.fromJikanJson(Map<String, dynamic>.from(anime)))
+          .toList();
+      if (type.isNotEmpty) {
+        final t = type.toLowerCase();
+        final filtered = list.where((a) => (a.mediaType ?? '').toLowerCase() == t).toList();
+        if (filtered.isNotEmpty) list = filtered;
+      }
+      return limit > 0 ? list.take(limit).toList() : list;
     } else {
       throw Exception('Failed to load current season data');
     }
@@ -373,7 +428,7 @@ class JikanApi {
   Future<AnimeNewsResponse> getAnimeNews(int animeId,
       {int page = 1, String category = "anime"}) async {
     final base = category == "manga" ? '$_jikanv4/manga' : _baseUrl;
-    final url = Uri.parse('$base/$animeId/news?page=$page');
+    final url = Uri.parse('$base/$animeId/news');
     final response = await JikanClient.instance.get(url);
 
     if (response.statusCode == 200) {
@@ -401,9 +456,8 @@ class JikanApi {
 
   Future<AnimeForumResponse> _getAnimeForum(int animeId, AnimeForumFilter filter,
       {String category = "anime"}) async {
-    final filterValue = getAnimeForumFilterValue(filter);
     final base = category == "manga" ? '$_jikanv4/manga' : _baseUrl;
-    final url = Uri.parse('$base/$animeId/forum?filter=$filterValue');
+    final url = Uri.parse('$base/$animeId/forum');
     final response = await JikanClient.instance.get(url);
 
     if (response.statusCode == 200) {
@@ -458,7 +512,7 @@ class JikanApi {
   static Future<AnimeUserUpdatesResponse> getAnimeUserUpdates(int animeId,
       {int page = 1, String category = "anime"}) async {
     final base = category == "manga" ? '$_jikanv4/manga' : _baseUrl;
-    final url = Uri.parse('$base/$animeId/userupdates?page=$page');
+    final url = Uri.parse('$base/$animeId/userupdates');
     final response = await JikanClient.instance.get(url);
 
     if (response.statusCode == 200) {
@@ -493,6 +547,55 @@ class JikanApi {
     }
   }
 
+  Future<({List<JikanAnime> data, bool hasNextPage})> getAnimeSearchPaged({
+    int? page,
+    String? q,
+    AnimeSearchQueryType? type,
+    double? score,
+    double? minScore,
+    AnimeSearchQueryStatus? status,
+    AnimeSearchQueryRating? rating,
+    String? genres,
+    AnimeSearchQueryOrderBy? orderBy,
+    SearchQuerySort? sort,
+    String? letter,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final queryParameters = <String, String>{
+      if (page != null) 'page': page.toString(),
+      if (q != null) 'q': q,
+      if (type != null) 'type': type.value,
+      if (score != null) 'score': score.toString(),
+      if (minScore != null) 'min_score': minScore.toString(),
+      if (status != null) 'status': status.value,
+      if (rating != null) 'rating': rating.value,
+      if (genres != null) 'genres': genres,
+      if (orderBy != null) 'order_by': orderBy.value,
+      if (sort != null) 'sort': sort.value,
+      if (letter != null) 'letter': letter,
+      if (startDate != null) 'start_date': startDate,
+      if (endDate != null) 'end_date': endDate,
+    };
+
+    final url = Uri.parse(_baseUrl).replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+    final response = await JikanClient.instance.get(url);
+
+    if (response.statusCode == 200) {
+      final jsonData = jsonDecode(response.body) as Map<String, dynamic>;
+      final list = ((jsonData['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => JikanAnime.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      final hasNext = jikanHasNextPage(jikanPagination(jsonData)) ?? false;
+      return (data: list, hasNextPage: hasNext);
+    } else {
+      throw Exception('Failed to search anime (${response.statusCode})');
+    }
+  }
+
   Future<List<JikanAnime>> getAnimeSearch({
     bool? unapproved,
     int? page,
@@ -514,39 +617,22 @@ class JikanApi {
     String? startDate,
     String? endDate,
   }) async {
-    final queryParameters = {
-      if (unapproved != null) 'unapproved': unapproved.toString(),
-      if (page != null) 'page': page.toString(),
-      if (limit != null) 'limit': limit.toString(),
-      if (q != null) 'q': q,
-      if (type != null) 'type': type.value,
-      if (score != null) 'score': score.toString(),
-      if (minScore != null) 'min_score': minScore.toString(),
-      if (maxScore != null) 'max_score': maxScore.toString(),
-      if (status != null) 'status': status.value,
-      if (rating != null) 'rating': rating.value,
-      if (sfw != null) 'sfw': sfw.toString(),
-      if (genres != null) 'genres': genres,
-      if (genresExclude != null) 'genres_exclude': genresExclude,
-      if (orderBy != null) 'order_by': orderBy.value,
-      if (sort != null) 'sort': sort.value,
-      if (letter != null) 'letter': letter,
-      if (producers != null) 'producers': producers,
-      if (startDate != null) 'start_date': startDate,
-      if (endDate != null) 'end_date': endDate,
-    };
-
-    final url = Uri.parse(_baseUrl).replace(queryParameters: queryParameters);
-    final response = await JikanClient.instance.get(url);
-
-    if (response.statusCode == 200) {
-      final jsonData = jsonDecode(response.body);
-      return (jsonData['data'] as List)
-          .map((e) => JikanAnime.fromJson(e))
-          .toList();
-    } else {
-      throw Exception('Failed to search anime');
-    }
+    final result = await getAnimeSearchPaged(
+      page: page,
+      q: q,
+      type: type,
+      score: score,
+      minScore: minScore,
+      status: status,
+      rating: rating,
+      genres: genres,
+      orderBy: orderBy,
+      sort: sort,
+      letter: letter,
+      startDate: startDate,
+      endDate: endDate,
+    );
+    return result.data;
   }
 
   Future<GenreResponse> getGenre(GenreCategory category,
@@ -611,17 +697,13 @@ class JikanApi {
     SearchQuerySort? sort,
     String? letter,
   }) async {
-    final queryParameters = {
+    final queryParameters = <String, String>{
       if (q != null) 'q': q,
-      if (page != null) 'page': page.toString(),
-      if (limit != null) 'limit': limit.toString(),
-      if (orderBy != null) 'order_by': orderBy.value,
-      if (sort != null) 'sort': sort.value,
-      if (letter != null) 'letter': letter,
     };
 
-    final url = Uri.parse('$_jikanv4/producers')
-        .replace(queryParameters: queryParameters);
+    final url = Uri.parse('$_jikanv4/producers').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
     final response = await JikanClient.instance.get(url);
 
     if (response.statusCode == 200) {
@@ -633,6 +715,55 @@ class JikanApi {
   }
 
   // ---- Manga endpoints ----
+
+  Future<({List<JikanAnime> data, bool hasNextPage})> getMangaSearchPaged({
+    int? page,
+    String? q,
+    String? type,
+    double? score,
+    double? minScore,
+    String? status,
+    String? genres,
+    String? orderBy,
+    String? sort,
+    String? letter,
+    String? magazines,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final queryParameters = <String, String>{
+      if (page != null) 'page': page.toString(),
+      if (q != null) 'q': q,
+      if (type != null) 'type': type,
+      if (score != null) 'score': score.toString(),
+      if (minScore != null) 'min_score': minScore.toString(),
+      if (status != null) 'status': status,
+      if (genres != null) 'genres': genres,
+      if (orderBy != null) 'order_by': orderBy,
+      if (sort != null) 'sort': sort,
+      if (letter != null) 'letter': letter,
+      if (magazines != null) 'magazines': magazines,
+      if (startDate != null) 'start_date': startDate,
+      if (endDate != null) 'end_date': endDate,
+    };
+
+    final url = Uri.parse('$_jikanv4/manga').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+    final response = await JikanClient.instance.get(url);
+
+    if (response.statusCode == 200) {
+      final jsonData = jsonDecode(response.body) as Map<String, dynamic>;
+      final list = ((jsonData['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => JikanAnime.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      final hasNext = jikanHasNextPage(jikanPagination(jsonData)) ?? false;
+      return (data: list, hasNextPage: hasNext);
+    } else {
+      throw Exception('Failed to search manga (${response.statusCode})');
+    }
+  }
 
   Future<List<JikanAnime>> getMangaSearch({
     bool? unapproved,
@@ -654,39 +785,22 @@ class JikanApi {
     String? startDate,
     String? endDate,
   }) async {
-    final queryParameters = {
-      if (unapproved != null) 'unapproved': unapproved.toString(),
-      if (page != null) 'page': page.toString(),
-      if (limit != null) 'limit': limit.toString(),
-      if (q != null) 'q': q,
-      if (type != null) 'type': type,
-      if (score != null) 'score': score.toString(),
-      if (minScore != null) 'min_score': minScore.toString(),
-      if (maxScore != null) 'max_score': maxScore.toString(),
-      if (status != null) 'status': status,
-      if (sfw != null) 'sfw': sfw.toString(),
-      if (genres != null) 'genres': genres,
-      if (genresExclude != null) 'genres_exclude': genresExclude,
-      if (orderBy != null) 'order_by': orderBy,
-      if (sort != null) 'sort': sort,
-      if (letter != null) 'letter': letter,
-      if (magazines != null) 'magazines': magazines,
-      if (startDate != null) 'start_date': startDate,
-      if (endDate != null) 'end_date': endDate,
-    };
-
-    final url =
-        Uri.parse('$_jikanv4/manga').replace(queryParameters: queryParameters);
-    final response = await JikanClient.instance.get(url);
-
-    if (response.statusCode == 200) {
-      final jsonData = jsonDecode(response.body);
-      return (jsonData['data'] as List)
-          .map((e) => JikanAnime.fromJson(e))
-          .toList();
-    } else {
-      throw Exception('Failed to search manga');
-    }
+    final result = await getMangaSearchPaged(
+      page: page,
+      q: q,
+      type: type,
+      score: score,
+      minScore: minScore,
+      status: status,
+      genres: genres,
+      orderBy: orderBy,
+      sort: sort,
+      letter: letter,
+      magazines: magazines,
+      startDate: startDate,
+      endDate: endDate,
+    );
+    return result.data;
   }
 
   Future<JikanAnime> getMangaFullById(int id) async {
@@ -734,22 +848,29 @@ class JikanApi {
   // ---- Seasons & Schedule endpoints ----
 
   Future<List<Anime>> getSeasonByYearAndSeason(int year, String season,
-      {String? filter, int? limit, int? page}) async {
-    final queryParameters = {
-      if (filter != null) 'filter': filter,
-      if (limit != null) 'limit': limit.toString(),
-      if (page != null) 'page': page.toString(),
+      {String? filter, int? limit, int? page, bool? continuing}) async {
+    final queryParameters = <String, String>{
+      if (continuing != null) 'continuing': continuing.toString(),
     };
 
-    final url = Uri.parse('$_jikanv4/seasons/$year/$season')
-        .replace(queryParameters: queryParameters);
+    final url = Uri.parse('$_jikanv4/seasons/$year/$season').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
     final response = await JikanClient.instance.get(url);
 
     if (response.statusCode == 200) {
       final jsonData = jsonDecode(response.body);
-      return (jsonData['data'] as List)
-          .map((e) => Anime.fromJikanJson(e))
+      var list = ((jsonData['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Anime.fromJikanJson(Map<String, dynamic>.from(e)))
           .toList();
+      if (filter != null && filter.isNotEmpty) {
+        final f = filter.toLowerCase();
+        final filtered = list.where((a) => (a.mediaType ?? '').toLowerCase() == f).toList();
+        if (filtered.isNotEmpty) list = filtered;
+      }
+      if (limit != null && limit > 0) list = list.take(limit).toList();
+      return list;
     } else {
       throw Exception('Failed to load season data for $season $year');
     }
@@ -769,27 +890,56 @@ class JikanApi {
 
   Future<List<Anime>> getSchedules(
       {String? filter, int? page, int? limit}) async {
-    final queryParameters = {
+    final queryParameters = <String, String>{
       if (filter != null) 'filter': filter,
-      if (page != null) 'page': page.toString(),
-      if (limit != null) 'limit': limit.toString(),
     };
 
-    final url = Uri.parse('$_jikanv4/schedules')
-        .replace(queryParameters: queryParameters);
+    final url = Uri.parse('$_jikanv4/schedules').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
     final response = await JikanClient.instance.get(url);
 
     if (response.statusCode == 200) {
       final jsonData = jsonDecode(response.body);
-      return (jsonData['data'] as List)
-          .map((e) => Anime.fromJikanJson(e))
+      var list = ((jsonData['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Anime.fromJikanJson(Map<String, dynamic>.from(e)))
           .toList();
+      if (limit != null && limit > 0) list = list.take(limit).toList();
+      return list;
     } else {
       throw Exception('Failed to load schedules');
     }
   }
 
   // ---- Search endpoints ----
+
+  Future<({List<CharacterFull> data, bool hasNextPage})> searchCharactersPaged({
+    String? q,
+    int? page,
+  }) async {
+    final queryParameters = <String, String>{
+      if (q != null) 'q': q,
+      if (page != null) 'page': page.toString(),
+    };
+
+    final url = Uri.parse('$_jikanv4/characters').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+    final response = await JikanClient.instance.get(url);
+
+    if (response.statusCode == 200) {
+      final jsonData = jsonDecode(response.body) as Map<String, dynamic>;
+      final list = ((jsonData['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => CharacterFull.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      final hasNext = jikanHasNextPage(jikanPagination(jsonData)) ?? false;
+      return (data: list, hasNextPage: hasNext);
+    } else {
+      throw Exception('Failed to search characters (${response.statusCode})');
+    }
+  }
 
   Future<List<CharacterFull>> searchCharacters({
     String? q,
@@ -799,26 +949,34 @@ class JikanApi {
     String? sort,
     String? letter,
   }) async {
-    final queryParameters = {
+    final result = await searchCharactersPaged(q: q, page: page);
+    return result.data;
+  }
+
+  Future<({List<PersonFull> data, bool hasNextPage})> searchPeoplePaged({
+    String? q,
+    int? page,
+  }) async {
+    final queryParameters = <String, String>{
       if (q != null) 'q': q,
       if (page != null) 'page': page.toString(),
-      if (limit != null) 'limit': limit.toString(),
-      if (orderBy != null) 'order_by': orderBy,
-      if (sort != null) 'sort': sort,
-      if (letter != null) 'letter': letter,
     };
 
-    final url = Uri.parse('$_jikanv4/characters')
-        .replace(queryParameters: queryParameters);
+    final url = Uri.parse('$_jikanv4/people').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
     final response = await JikanClient.instance.get(url);
 
     if (response.statusCode == 200) {
-      final jsonData = jsonDecode(response.body);
-      return (jsonData['data'] as List)
-          .map((e) => CharacterFull.fromJson(e))
+      final jsonData = jsonDecode(response.body) as Map<String, dynamic>;
+      final list = ((jsonData['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => PersonFull.fromJson(Map<String, dynamic>.from(e)))
           .toList();
+      final hasNext = jikanHasNextPage(jikanPagination(jsonData)) ?? false;
+      return (data: list, hasNextPage: hasNext);
     } else {
-      throw Exception('Failed to search characters');
+      throw Exception('Failed to search people (${response.statusCode})');
     }
   }
 
@@ -830,27 +988,8 @@ class JikanApi {
     String? sort,
     String? letter,
   }) async {
-    final queryParameters = {
-      if (q != null) 'q': q,
-      if (page != null) 'page': page.toString(),
-      if (limit != null) 'limit': limit.toString(),
-      if (orderBy != null) 'order_by': orderBy,
-      if (sort != null) 'sort': sort,
-      if (letter != null) 'letter': letter,
-    };
-
-    final url =
-        Uri.parse('$_jikanv4/people').replace(queryParameters: queryParameters);
-    final response = await JikanClient.instance.get(url);
-
-    if (response.statusCode == 200) {
-      final jsonData = jsonDecode(response.body);
-      return (jsonData['data'] as List)
-          .map((e) => PersonFull.fromJson(e))
-          .toList();
-    } else {
-      throw Exception('Failed to search people');
-    }
+    final result = await searchPeoplePaged(q: q, page: page);
+    return result.data;
   }
 
   // ---- Random endpoints ----

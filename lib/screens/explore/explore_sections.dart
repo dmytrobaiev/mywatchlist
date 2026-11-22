@@ -74,7 +74,12 @@ Widget _rankingCard(BuildContext context, ({Enum ranking, String label}) e, int 
       hue: 18.0 + index * 34,
       width: width,
       height: height,
-      onTap: () => AppRoutes.openSearch(context, query: rankingQuery(e.ranking, isAnime: isAnime)),
+      onTap: () => AppRoutes.push(
+        context,
+        isAnime
+            ? GeneralSearchScreen.byRanking(e.ranking as RankingType)
+            : GeneralSearchScreen.byMangaRanking(e.ranking as MangaRanking),
+      ),
     );
 
 /// Rankings (top by score, popularity, airing…) as a row of picture cards (DailyAL) that open

@@ -191,7 +191,8 @@ class _AppSidebarState extends State<AppSidebar> {
           return ListView(
             padding: EdgeInsets.zero,
             children: [
-              _buildHeader(theme, accountState, tracker),
+              _buildHeader(theme, accountState, tracker,
+                  signedIn: signedIn, username: user?.username),
               if (needsReLogin)
                 _SessionExpiredCard(
                   tracker: tracker,
@@ -199,6 +200,28 @@ class _AppSidebarState extends State<AppSidebar> {
                       _go((host) => AppRoutes.signInAgain(host, tracker)),
                 ),
               _GroupLabel(S.current.Sidebar_Section_Profile),
+              // High-frequency daily items first so they are reachable without scrolling.
+              if (signedIn && tracker == AccountType.myanimelist)
+                for (final item in [
+                  malNotificationsSidebarItem(context),
+                  malMessagesSidebarItem(context),
+                ])
+                  _SidebarTile(
+                    icon: item.icon,
+                    title: item.title,
+                    trailing: item.trailing,
+                    onTap: () => _go((_) => item.onTap()),
+                  ),
+              _SidebarTile(
+                icon: Icons.calendar_month_outlined,
+                title: S.current.AnimeCalendar,
+                onTap: () => _go(AppRoutes.openCalendar),
+              ),
+              _SidebarTile(
+                icon: Icons.bookmark_outline,
+                title: S.current.Bookmarks,
+                onTap: () => _go(AppRoutes.openBookmarks),
+              ),
               if (signedIn && tracker == AccountType.myanimelist)
                 // DailyAL's profile shortcuts, each opening the profile on its tab.
                 for (final (tab, icon, label) in _profileShortcuts())
@@ -216,28 +239,6 @@ class _AppSidebarState extends State<AppSidebar> {
                   onTap: () => _go((host) => AppRoutes.openUserProfile(host,
                       tracker: tracker, username: user?.username)),
                 ),
-              _SidebarTile(
-                icon: Icons.bookmark_outline,
-                title: S.current.Bookmarks,
-                onTap: () => _go(AppRoutes.openBookmarks),
-              ),
-              _SidebarTile(
-                icon: Icons.calendar_month_outlined,
-                title: S.current.AnimeCalendar,
-                onTap: () => _go(AppRoutes.openCalendar),
-              ),
-              // MyAnimeList's website features: notifications hub and private messages.
-              if (signedIn && tracker == AccountType.myanimelist)
-                for (final item in [
-                  malNotificationsSidebarItem(context),
-                  malMessagesSidebarItem(context),
-                ])
-                  _SidebarTile(
-                    icon: item.icon,
-                    title: item.title,
-                    trailing: item.trailing,
-                    onTap: () => _go((_) => item.onTap()),
-                  ),
               for (final item in widget.extraItems)
                 _SidebarTile(
                   icon: item.icon,
@@ -322,7 +323,8 @@ class _AppSidebarState extends State<AppSidebar> {
   }
 
   Widget _buildHeader(
-      ThemeData theme, AccountState state, AccountType tracker) {
+      ThemeData theme, AccountState state, AccountType tracker,
+      {required bool signedIn, String? username}) {
     final colors = theme.colorScheme;
     final tokens = AppColors.of(context);
     String? avatarUrl;
@@ -389,43 +391,83 @@ class _AppSidebarState extends State<AppSidebar> {
             ),
           ),
           PositionedDirectional(
-            start: 20,
-            end: 20,
-            bottom: 18,
-            child: Row(
-              children: [
-                AvatarWidget(
-                  url: avatarUrl,
-                  height: 56,
-                  width: 56,
-                  borderColor: tokens.onImageScrim,
-                  borderWidth: 2,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+            start: 12,
+            end: 12,
+            bottom: 12,
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: signedIn
+                    ? () => _go((host) => AppRoutes.openUserProfile(
+                          host,
+                          tracker: tracker,
+                          username: username,
+                        ))
+                    : () => _go(AppRoutes.openLogin),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Row(
                     children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: tokens.onImageScrim,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      AvatarWidget(
+                        url: avatarUrl,
+                        height: 56,
+                        width: 56,
+                        borderColor: tokens.onImageScrim,
+                        borderWidth: 2,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        trackerLabel,
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: tokens.onImageScrim.withValues(alpha: 0.85)),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                color: tokens.onImageScrim,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            GestureDetector(
+                              onTap: signedIn
+                                  ? () => _go(AppRoutes.openManageAccounts)
+                                  : null,
+                              behavior: HitTestBehavior.opaque,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      trackerLabel,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: tokens.onImageScrim.withValues(alpha: 0.85),
+                                      ),
+                                    ),
+                                  ),
+                                  if (signedIn) ...[
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.swap_horiz_rounded,
+                                      size: 16,
+                                      color: tokens.onImageScrim.withValues(alpha: 0.85),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],

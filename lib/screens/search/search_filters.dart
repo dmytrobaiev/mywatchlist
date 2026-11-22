@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mywatchlist/enums.dart';
 import 'package:mywatchlist/screens/search/search_catalog.dart';
 import 'package:mywatchlist/widgets/MAL/search/filtermodal.dart';
 
@@ -51,6 +52,8 @@ abstract final class FilterKey {
   static const letter = 'letter';
   static const startDate = 'start_date';
   static const endDate = 'end_date';
+  static const season = 'season';
+  static const year = 'year';
   static const producer = 'producer';
   static const magazine = 'magazines';
   static const genresIn = 'genres_in';
@@ -95,11 +98,12 @@ class SearchFilters {
   List<int> get genresIn => (_values[FilterKey.genresIn] as List<int>?) ?? const [];
   List<int> get genresOut => (_values[FilterKey.genresOut] as List<int>?) ?? const [];
 
-  /// How many filters are on; the genre include/exclude pair counts as one.
+  /// How many filters are on; the genre include/exclude pair and season/year pair each count as one.
   int get activeCount {
     var count = 0;
     for (final key in _values.keys) {
       if (key == FilterKey.genresOut && _values.containsKey(FilterKey.genresIn)) continue;
+      if (key == FilterKey.year && _values.containsKey(FilterKey.season)) continue;
       if (key == FilterKey.producerLabel || key == FilterKey.magazineLabel) continue;
       count++;
     }
@@ -116,6 +120,8 @@ class SearchFilters {
     if (empty) {
       next.remove(key);
       if (key == FilterKey.orderBy) next.remove(FilterKey.sort);
+      if (key == FilterKey.season) next.remove(FilterKey.year);
+      if (key == FilterKey.year) next.remove(FilterKey.season);
       if (key == FilterKey.producer) next.remove(FilterKey.producerLabel);
       if (key == FilterKey.magazine) next.remove(FilterKey.magazineLabel);
     } else {
@@ -128,13 +134,141 @@ class SearchFilters {
 
   SearchFilters remove(String key) => set(key, null);
 
+  /// Date bounds `(startDate, endDate)` for a `(season, year)` filter when present.
+  ({String start, String end})? get seasonDateBounds {
+    final s = text(FilterKey.season)?.toLowerCase();
+    final y = integer(FilterKey.year);
+    if (s == null || y == null) return null;
+    return switch (s) {
+      'winter' => (start: '$y-01-01', end: '$y-03-31'),
+      'spring' => (start: '$y-04-01', end: '$y-06-30'),
+      'summer' => (start: '$y-07-01', end: '$y-09-30'),
+      'fall' => (start: '$y-10-01', end: '$y-12-31'),
+      _ => null,
+    };
+  }
+
   /// The API values by key, display labels left out (what MyAnimeList's search page route
   /// takes, see `MalSearchQuery`).
-  Map<String, Object?> toApiMap() => {
-        for (final entry in _values.entries)
-          if (entry.key != FilterKey.producerLabel && entry.key != FilterKey.magazineLabel)
-            entry.key: entry.value,
+  Map<String, Object?> toApiMap() {
+    final out = <String, Object?>{
+      for (final entry in _values.entries)
+        if (entry.key != FilterKey.producerLabel &&
+            entry.key != FilterKey.magazineLabel &&
+            entry.key != FilterKey.season &&
+            entry.key != FilterKey.year)
+          entry.key: entry.value,
+    };
+    final bounds = seasonDateBounds;
+    if (bounds != null) {
+      out.putIfAbsent(FilterKey.startDate, () => bounds.start);
+      out.putIfAbsent(FilterKey.endDate, () => bounds.end);
+    }
+    return out;
+  }
+
+  /// Native filter preset for a MAL anime ranking.
+  static SearchFilters forAnimeRanking(RankingType type) => switch (type) {
+        RankingType.ALL => empty.set(FilterKey.orderBy, 'rank').set(FilterKey.sort, 'asc'),
+        RankingType.BYPOPULARITY =>
+          empty.set(FilterKey.orderBy, 'popularity').set(FilterKey.sort, 'asc'),
+        RankingType.FAVOURITE =>
+          empty.set(FilterKey.orderBy, 'favorites').set(FilterKey.sort, 'desc'),
+        RankingType.AIRING => empty
+            .set(FilterKey.status, 'airing')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        RankingType.UPCOMING => empty
+            .set(FilterKey.status, 'upcoming')
+            .set(FilterKey.orderBy, 'members')
+            .set(FilterKey.sort, 'desc'),
+        RankingType.TV => empty
+            .set(FilterKey.type, 'tv')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        RankingType.MOVIE => empty
+            .set(FilterKey.type, 'movie')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        RankingType.OVA => empty
+            .set(FilterKey.type, 'ova')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        RankingType.ONA => empty
+            .set(FilterKey.type, 'ona')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        RankingType.SPECIAL => empty
+            .set(FilterKey.type, 'special')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
       };
+
+  /// Native filter preset for a MAL manga ranking.
+  static SearchFilters forMangaRanking(MangaRanking type) => switch (type) {
+        MangaRanking.all => empty.set(FilterKey.orderBy, 'rank').set(FilterKey.sort, 'asc'),
+        MangaRanking.bypopularity =>
+          empty.set(FilterKey.orderBy, 'popularity').set(FilterKey.sort, 'asc'),
+        MangaRanking.favorite =>
+          empty.set(FilterKey.orderBy, 'favorites').set(FilterKey.sort, 'desc'),
+        MangaRanking.manga => empty
+            .set(FilterKey.type, 'manga')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        MangaRanking.novels => empty
+            .set(FilterKey.type, 'novel')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        MangaRanking.lightnovels => empty
+            .set(FilterKey.type, 'lightnovel')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        MangaRanking.oneshots => empty
+            .set(FilterKey.type, 'oneshot')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        MangaRanking.doujin => empty
+            .set(FilterKey.type, 'doujin')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        MangaRanking.manhwa => empty
+            .set(FilterKey.type, 'manhwa')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+        MangaRanking.manhua => empty
+            .set(FilterKey.type, 'manhua')
+            .set(FilterKey.orderBy, 'score')
+            .set(FilterKey.sort, 'desc'),
+      };
+
+  /// Native filter preset for an anime season.
+  static SearchFilters forSeason(SeasonType season, int year) =>
+      empty.set(FilterKey.season, seasonMap[season]!).set(FilterKey.year, year);
+
+  /// Returns the exact [RankingType] when these filters are an unmodified anime ranking preset.
+  RankingType? matchAnimeRanking() {
+    for (final type in RankingType.values) {
+      if (this == forAnimeRanking(type)) return type;
+    }
+    return null;
+  }
+
+  /// Returns the exact [MangaRanking] when these filters are an unmodified manga ranking preset.
+  MangaRanking? matchMangaRanking() {
+    for (final type in MangaRanking.values) {
+      if (this == forMangaRanking(type)) return type;
+    }
+    return null;
+  }
+
+  /// Returns `(season, year)` when these filters are an unmodified season preset.
+  ({SeasonType season, int year})? matchSeason() {
+    if (_values.length != 2) return null;
+    final s = seasonMapInverse[text(FilterKey.season)?.toLowerCase()];
+    final y = integer(FilterKey.year);
+    if (s == null || y == null) return null;
+    return (season: s, year: y);
+  }
 
   GenreState genreState(int id) {
     if (genresIn.contains(id)) return GenreState.included;
@@ -177,6 +311,8 @@ class SearchFilters {
           FilterKey.letter,
           FilterKey.startDate,
           FilterKey.endDate,
+          FilterKey.season,
+          FilterKey.year,
           FilterKey.producer,
           FilterKey.producerLabel,
           FilterKey.genresIn,

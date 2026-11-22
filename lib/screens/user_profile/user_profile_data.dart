@@ -6,6 +6,7 @@ import 'package:mywatchlist/cache/cached_user_profile.dart';
 import 'package:mywatchlist/constants/constants.dart' show Constants;
 import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_fallbacks.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
 import 'package:mywatchlist/services/api/MAL/mal_user.dart';
 import 'package:mywatchlist/services/api/MAL/mal_user_prof.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/user_anime_statistics.dart';
@@ -50,13 +51,12 @@ class ProfileFavorites {
     final out = <ProfileFavorite>[];
     for (final row in raw) {
       if (row is! Map) continue;
-      final id = (row['mal_id'] as num?)?.toInt() ?? 0;
+      final map = Map<String, dynamic>.from(row);
+      final id = jikanInt(map['malId'] ?? map['mal_id']) ?? 0;
       final title =
-          ((named ? row['name'] : row['title']) ?? row['title'] ?? row['name']) as String?;
+          ((named ? map['name'] : map['title']) ?? map['title'] ?? map['name']) as String?;
       if (id == 0 || title == null || title.isEmpty) continue;
-      final images = row['images'];
-      final jpg = images is Map ? images['jpg'] : null;
-      final url = jpg is Map ? jpg['image_url'] as String? : null;
+      final url = jikanBestImage(map);
       out.add(ProfileFavorite(id: id, title: title, imageUrl: url));
     }
     return out;
@@ -444,25 +444,28 @@ class UserProfileRepository {
     final stats = parseJikanStatistics(jikan);
     final malStats = mal?.animeStatistics;
     final hasMalStats = malStats != null && (malStats.numItems ?? 0) > 0;
-    final images = jikan?['images'];
-    final jpg = images is Map ? images['jpg'] : null;
-    final jikanPicture = jpg is Map ? jpg['image_url'] as String? : null;
+    final profile = jikanMap(jikan?['profile']) ?? jikan;
+    final jikanPicture = profile != null ? jikanBestImage(profile) : null;
 
     String? clean(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
 
     return UserProfileData(
-      id: mal?.id != null && mal!.id != 0 ? mal.id : (jikan?['mal_id'] as num?)?.toInt() ?? 0,
+      id: mal?.id != null && mal!.id != 0
+          ? mal.id
+          : jikanInt(profile?['malId'] ?? profile?['mal_id'] ?? jikan?['mal_id']) ?? 0,
       username: name,
       pictureUrl: clean(mal?.picture) ?? jikanPicture,
-      gender: clean(mal?.gender) ?? clean(jikan?['gender'] as String?),
-      location: clean(mal?.location) ?? clean(jikan?['location'] as String?),
-      birthday: mal?.birthday?.toIso8601String() ?? clean(jikan?['birthday'] as String?),
-      joined: clean(mal?.joinedAt) ?? clean(jikan?['joined'] as String?),
+      gender: clean(mal?.gender) ?? clean(profile?['gender'] as String?),
+      location: clean(mal?.location) ?? clean(profile?['location'] as String?),
+      birthday: mal?.birthday?.toIso8601String() ?? clean(profile?['birthday'] as String?),
+      joined: clean(mal?.joinedAt) ??
+          clean((profile?['joinedAt'] ?? profile?['joined']) as String?),
       timezone: clean(mal?.timezone),
-      isSupporter: mal?.isSupporter ?? (jikan?['is_supporter'] == true),
-      lastOnline: clean(jikan?['last_online'] as String?),
-      about: clean(jikan?['about'] as String?),
-      aboutModern: jikan?['about_modern'] == true,
+      isSupporter: mal?.isSupporter ??
+          ((profile?['isSupporter'] ?? profile?['is_supporter'] ?? jikan?['is_supporter']) == true),
+      lastOnline: clean((profile?['lastOnlineAt'] ?? profile?['last_online']) as String?),
+      about: clean(profile?['about'] as String?),
+      aboutModern: (profile?['about_modern'] ?? jikan?['about_modern']) == true,
       anime: hasMalStats ? ListStats.fromMalAnime(malStats) : stats.anime,
       manga: stats.manga,
       animeDays: hasMalStats

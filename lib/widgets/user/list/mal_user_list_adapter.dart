@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:mywatchlist/constants/constants.dart' show AccountType, TitleLang;
+import 'package:mywatchlist/constants/constants.dart' show AccountType, Constants, TitleLang;
 import 'package:mywatchlist/screens/user_profile/user_profile_data.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
 import 'package:mywatchlist/services/api/MAL/mal_api.dart';
@@ -214,17 +214,18 @@ class MalUserListAdapter extends UserListAdapter {
         }
       }
       final response = await _jikanGet(Uri.parse(
-          'https://api.jikan.moe/v4/users/${Uri.encodeComponent(name)}/statistics'));
+          '${Constants.jikanV4}/users/${Uri.encodeComponent(name)}/statistics'));
       if (response.statusCode != 200) return null;
       final manga = ((json.decode(response.body) as Map)['data'] as Map?)?['manga'];
       if (manga is! Map) return null;
-      int at(String k) => (manga[k] as num?)?.toInt() ?? 0;
+      int at(String k, [String? alt]) =>
+          ((manga[k] ?? (alt != null ? manga[alt] : null)) as num?)?.toInt() ?? 0;
       return {
         ListEntryStatus.current: at('reading'),
         ListEntryStatus.completed: at('completed'),
-        ListEntryStatus.onHold: at('on_hold'),
+        ListEntryStatus.onHold: at('onHold', 'on_hold'),
         ListEntryStatus.dropped: at('dropped'),
-        ListEntryStatus.planned: at('plan_to_read'),
+        ListEntryStatus.planned: at('planToRead', 'plan_to_read'),
       };
     } catch (e) {
       debugPrint('MalUserListAdapter.statusCounts: $e');

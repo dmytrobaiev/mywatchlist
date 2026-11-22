@@ -1,5 +1,7 @@
 // ignore_for_file: library_private_types_in_public_api
 
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class PersonFull {
   final int? malId;
   final String? url;
@@ -34,21 +36,40 @@ class PersonFull {
   });
 
   factory PersonFull.fromJson(Map<String, dynamic> json) {
+    final imgUrl = jikanStr(json['imageUrl'] ?? json['image_url']);
+    final rawAlt = json['alternateNames'] ?? json['alternate_names'];
     return PersonFull(
-      malId: json['mal_id'],
-      url: json['url'],
-      websiteUrl: json['website_url'],
-      images: json['images'] != null ? Images.fromJson(json['images']) : null,
-      name: json['name'],
-      givenName: json['given_name'],
-      familyName: json['family_name'],
-      alternateNames: json['alternate_names'] != null ? List<String>.from(json['alternate_names']) : null,
-      birthday: json['birthday'],
-      favorites: json['favorites'],
-      about: json['about'],
-      anime: json['anime'] != null ? (json['anime'] as List).map((e) => _AnimeStaff.fromJson(e)).toList() : null,
-      manga: json['manga'] != null ? (json['manga'] as List).map((e) => _MangaStaff.fromJson(e)).toList() : null,
-      voices: json['voices'] != null ? (json['voices'] as List).map((e) => _VoiceRole.fromJson(e)).toList() : null,
+      malId: jikanInt(json['malId'] ?? json['mal_id']),
+      url: json['url'] as String?,
+      websiteUrl: (json['websiteUrl'] ?? json['website_url'] ?? json['website']) as String?,
+      images: (json['images'] != null || imgUrl != null)
+          ? Images.fromAny(json['images'], fallbackImageUrl: imgUrl)
+          : null,
+      name: json['name'] as String?,
+      givenName: (json['givenName'] ?? json['given_name']) as String?,
+      familyName: (json['familyName'] ?? json['family_name']) as String?,
+      alternateNames: rawAlt is List ? rawAlt.map((e) => '$e').toList() : null,
+      birthday: (json['birthday'] ?? json['birthDate']) as String?,
+      favorites: jikanInt(json['favorites']),
+      about: json['about'] as String?,
+      anime: json['anime'] is List
+          ? (json['anime'] as List)
+              .whereType<Map>()
+              .map((e) => _AnimeStaff.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : null,
+      manga: json['manga'] is List
+          ? (json['manga'] as List)
+              .whereType<Map>()
+              .map((e) => _MangaStaff.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : null,
+      voices: json['voices'] is List
+          ? (json['voices'] as List)
+              .whereType<Map>()
+              .map((e) => _VoiceRole.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : null,
     );
   }
 }
@@ -58,10 +79,16 @@ class Images {
 
   Images({this.jpg});
 
-  factory Images.fromJson(Map<String, dynamic> json) {
-    return Images(
-      jpg: json['jpg'] != null ? ImageFormat.fromJson(json['jpg']) : null,
-    );
+  factory Images.fromJson(Map<String, dynamic> json) => Images.fromAny(json);
+
+  factory Images.fromAny(Object? raw, {String? fallbackImageUrl}) {
+    final map = jikanMap(raw);
+    if (map != null && map['jpg'] != null) {
+      return Images(jpg: ImageFormat.fromJson(jikanMap(map['jpg'])!));
+    }
+    final sizes = jikanImageSizes(raw, fallbackImageUrl: fallbackImageUrl);
+    final url = sizes.medium ?? sizes.large ?? sizes.small;
+    return Images(jpg: url != null ? ImageFormat(imageUrl: url) : null);
   }
 }
 
@@ -72,7 +99,7 @@ class ImageFormat {
 
   factory ImageFormat.fromJson(Map<String, dynamic> json) {
     return ImageFormat(
-      imageUrl: json['image_url'],
+      imageUrl: jikanStr(json['image_url'] ?? json['imageUrl'] ?? json['medium']),
     );
   }
 }
@@ -84,10 +111,23 @@ class _AnimeStaff {
   _AnimeStaff({this.position, this.anime});
 
   factory _AnimeStaff.fromJson(Map<String, dynamic> json) {
-    return _AnimeStaff(
-      position: json['position'],
-      anime: json['anime'] != null ? _Anime.fromJson(json['anime']) : null,
-    );
+    final nested = jikanMap(json['anime']);
+    String? pos = json['position'] as String?;
+    if (pos == null && json['positions'] is List) {
+      pos = (json['positions'] as List).join(', ');
+    }
+    final _Anime? anime = nested != null
+        ? _Anime.fromJson(nested)
+        : (json['animeId'] != null)
+            ? _Anime(
+                malId: jikanInt(json['animeId']),
+                title: json['animeTitle'] as String?,
+                images: json['imageUrl'] != null
+                    ? Images.fromAny(null, fallbackImageUrl: json['imageUrl'] as String?)
+                    : null,
+              )
+            : null;
+    return _AnimeStaff(position: pos, anime: anime);
   }
 }
 
@@ -98,10 +138,23 @@ class _MangaStaff {
   _MangaStaff({this.position, this.manga});
 
   factory _MangaStaff.fromJson(Map<String, dynamic> json) {
-    return _MangaStaff(
-      position: json['position'],
-      manga: json['manga'] != null ? _Manga.fromJson(json['manga']) : null,
-    );
+    final nested = jikanMap(json['manga']);
+    String? pos = json['position'] as String?;
+    if (pos == null && json['positions'] is List) {
+      pos = (json['positions'] as List).join(', ');
+    }
+    final _Manga? manga = nested != null
+        ? _Manga.fromJson(nested)
+        : (json['mangaId'] != null)
+            ? _Manga(
+                malId: jikanInt(json['mangaId']),
+                title: json['mangaTitle'] as String?,
+                images: json['imageUrl'] != null
+                    ? Images.fromAny(null, fallbackImageUrl: json['imageUrl'] as String?)
+                    : null,
+              )
+            : null;
+    return _MangaStaff(position: pos, manga: manga);
   }
 }
 
@@ -113,10 +166,32 @@ class _VoiceRole {
   _VoiceRole({this.role, this.anime, this.character});
 
   factory _VoiceRole.fromJson(Map<String, dynamic> json) {
+    final nestedAnime = jikanMap(json['anime']);
+    final nestedChar = jikanMap(json['character']);
     return _VoiceRole(
-      role: json['role'],
-      anime: json['anime'] != null ? _Anime.fromJson(json['anime']) : null,
-      character: json['character'] != null ? _Character.fromJson(json['character']) : null,
+      role: (json['role'] ?? json['characterRole']) as String?,
+      anime: nestedAnime != null
+          ? _Anime.fromJson(nestedAnime)
+          : (json['animeId'] != null)
+              ? _Anime(
+                  malId: jikanInt(json['animeId']),
+                  title: json['animeTitle'] as String?,
+                  images: json['animeImageUrl'] != null
+                      ? Images.fromAny(null, fallbackImageUrl: json['animeImageUrl'] as String?)
+                      : null,
+                )
+              : null,
+      character: nestedChar != null
+          ? _Character.fromJson(nestedChar)
+          : (json['characterId'] != null)
+              ? _Character(
+                  malId: jikanInt(json['characterId']),
+                  name: json['characterName'] as String?,
+                  images: json['characterImageUrl'] != null
+                      ? Images.fromAny(null, fallbackImageUrl: json['characterImageUrl'] as String?)
+                      : null,
+                )
+              : null,
     );
   }
 }
@@ -135,11 +210,14 @@ class _Anime {
   });
 
   factory _Anime.fromJson(Map<String, dynamic> json) {
+    final imgUrl = jikanStr(json['imageUrl'] ?? json['image_url']);
     return _Anime(
-      malId: json['mal_id'],
-      url: json['url'],
-      images: json['images'] != null ? Images.fromJson(json['images']) : null,
-      title: json['title'],
+      malId: jikanInt(json['malId'] ?? json['mal_id']),
+      url: json['url'] as String?,
+      images: (json['images'] != null || imgUrl != null)
+          ? Images.fromAny(json['images'], fallbackImageUrl: imgUrl)
+          : null,
+      title: json['title'] as String?,
     );
   }
 }
@@ -158,11 +236,14 @@ class _Manga {
   });
 
   factory _Manga.fromJson(Map<String, dynamic> json) {
+    final imgUrl = jikanStr(json['imageUrl'] ?? json['image_url']);
     return _Manga(
-      malId: json['mal_id'],
-      url: json['url'],
-      images: json['images'] != null ? Images.fromJson(json['images']) : null,
-      title: json['title'],
+      malId: jikanInt(json['malId'] ?? json['mal_id']),
+      url: json['url'] as String?,
+      images: (json['images'] != null || imgUrl != null)
+          ? Images.fromAny(json['images'], fallbackImageUrl: imgUrl)
+          : null,
+      title: json['title'] as String?,
     );
   }
 }
@@ -181,11 +262,14 @@ class _Character {
   });
 
   factory _Character.fromJson(Map<String, dynamic> json) {
+    final imgUrl = jikanStr(json['imageUrl'] ?? json['image_url']);
     return _Character(
-      malId: json['mal_id'],
-      url: json['url'],
-      images: json['images'] != null ? Images.fromJson(json['images']) : null,
-      name: json['name'],
+      malId: jikanInt(json['malId'] ?? json['mal_id']),
+      url: json['url'] as String?,
+      images: (json['images'] != null || imgUrl != null)
+          ? Images.fromAny(json['images'], fallbackImageUrl: imgUrl)
+          : null,
+      name: json['name'] as String?,
     );
   }
 }

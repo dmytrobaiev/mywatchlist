@@ -281,7 +281,7 @@ class _RecentList extends StatelessWidget {
                 height: cardHeight,
                 gridHeight: cardHeight,
                 showText: false,
-                showMemberCount: true,
+                showMemberCount: false,
                 displaySubType: DisplaySubType.compact,
                 onTap: () => openMedia(context, item, category),
                 onClose: () => onRemove(item.id),

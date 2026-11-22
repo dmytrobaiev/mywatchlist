@@ -29,7 +29,7 @@ class BookmarkButton extends StatelessWidget {
     this.showMessage = true,
   });
 
-  Future<void> _toggle(BuildContext context) async {
+  Future<void> _toggle(BuildContext context, {bool showSnack = true}) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
     final saved = await Bookmarks.toggle(
       tracker: tracker,
@@ -40,14 +40,14 @@ class BookmarkButton extends StatelessWidget {
       subtitle: subtitle,
       malId: malId,
     );
-    if (!showMessage || messenger == null) return;
+    if (!showSnack || !showMessage || messenger == null) return;
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text(saved ? S.current.Bm_Added : S.current.Bm_Removed),
         action: SnackBarAction(
           label: S.current.Bm_Undo,
-          onPressed: () => _toggle(context),
+          onPressed: () => _toggle(context, showSnack: false),
         ),
       ));
   }

@@ -95,12 +95,14 @@ class DateField extends StatelessWidget {
   final String? date;
   final bool busy;
   final ValueChanged<DateTime> onPicked;
+  final VoidCallback? onCleared;
 
   const DateField({
     super.key,
     required this.label,
     required this.date,
     required this.onPicked,
+    this.onCleared,
     this.busy = false,
   });
 
@@ -121,10 +123,20 @@ class DateField extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final empty = date == null;
+    final clearBtn = (!empty && onCleared != null && !busy)
+        ? IconButton(
+            tooltip: S.current.Clear,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+            icon: Icon(Icons.close, size: 16, color: theme.colorScheme.onSurfaceVariant),
+            onPressed: onCleared,
+          )
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FieldCaption(label),
+        FieldCaption(label, action: clearBtn),
         SizedBox(
           height: 48,
           width: double.infinity,

@@ -124,17 +124,26 @@ class GeneralSearchScreen extends StatefulWidget {
         filters: SearchFilters.empty.set(FilterKey.tag, tag),
       );
 
-  /// Anime of a season.
-  static GeneralSearchScreen bySeason(SeasonType season, int year) =>
-      GeneralSearchScreen(searchQuery: SpecialQuery.season(season, year), showBackButton: true);
+  /// Anime of a season (native season/year filter chips).
+  static GeneralSearchScreen bySeason(SeasonType season, int year) => GeneralSearchScreen(
+        category: SearchCategory.anime,
+        filters: SearchFilters.forSeason(season, year),
+        showBackButton: true,
+      );
 
-  /// An anime ranking (top airing, most popular…).
-  static GeneralSearchScreen byRanking(RankingType type) =>
-      GeneralSearchScreen(searchQuery: SpecialQuery.animeRanking(type), showBackButton: true);
+  /// An anime ranking (top airing, most popular…) as native composable filters.
+  static GeneralSearchScreen byRanking(RankingType type) => GeneralSearchScreen(
+        category: SearchCategory.anime,
+        filters: SearchFilters.forAnimeRanking(type),
+        showBackButton: true,
+      );
 
-  /// A manga ranking.
-  static GeneralSearchScreen byMangaRanking(MangaRanking type) =>
-      GeneralSearchScreen(searchQuery: SpecialQuery.mangaRanking(type), showBackButton: true);
+  /// A manga ranking as native composable filters.
+  static GeneralSearchScreen byMangaRanking(MangaRanking type) => GeneralSearchScreen(
+        category: SearchCategory.manga,
+        filters: SearchFilters.forMangaRanking(type),
+        showBackButton: true,
+      );
 
   /// The signed-in user's suggestions (`anime` or `manga`).
   static GeneralSearchScreen bySuggested({String category = SearchCategory.anime}) =>

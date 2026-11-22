@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/screens/MAL/detail/actions/detail_actions.dart';
 import 'package:mywatchlist/screens/MAL/detail/actions/more_info_modal.dart';
@@ -67,8 +66,8 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     viewportBoundaryGetter: () => Rect.fromLTRB(0, _pinnedExtent, 0, 0),
   );
 
-  /// True while the user scrolls up (the collapsed app bar hides its title).
-  final ValueNotifier<bool> _scrollingUp = ValueNotifier(true);
+  /// True once the page has scrolled past the header title so the pinned app bar shows it.
+  final ValueNotifier<bool> _showAppBarTitle = ValueNotifier(false);
 
   late DetailData _data;
   List<DetailSection> _sections = const [];
@@ -124,7 +123,7 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     _titlePrefSub?.cancel();
     _scroll.dispose();
     _tabController.dispose();
-    _scrollingUp.dispose();
+    _showAppBarTitle.dispose();
     super.dispose();
   }
 
@@ -266,8 +265,8 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
 
   void _onScroll() {
     final position = _scroll.position;
-    final up = position.userScrollDirection == ScrollDirection.forward;
-    if (_scrollingUp.value != up) _scrollingUp.value = up;
+    final showTitle = position.pixels > DetailHeader.toolbarHeight + 62;
+    if (_showAppBarTitle.value != showTitle) _showAppBarTitle.value = showTitle;
 
     // Tab sync: at most once per frame, after a real move, never while a tab
     // tap is scrolling to its section.
@@ -327,59 +326,58 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     _pinnedExtent = MediaQuery.paddingOf(context).top +
         DetailHeader.toolbarHeight +
         DetailHeader.tabBarHeight;
-    return PopScope(
-      canPop: !_showContentEdit,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _showContentEdit) _toggleEdit();
-      },
-      child: Scaffold(
-        floatingActionButtonLocation:
-            _showContentEdit ? FloatingActionButtonLocation.endFloat : null,
-        floatingActionButton: buildDetailFab(
-          data: _data,
-          editOpen: _showContentEdit,
-          onPressed: _toggleEdit,
-        ),
-        floatingActionButtonAnimator: NoScalingAnimation(),
-        body: Stack(
-          children: [
-            CustomScrollView(
-              key: _listKey,
-              controller: _scroll,
-              slivers: [
-                _appBar(context),
-                _body(),
-                const SliverWrapper(SizedBox(height: 80)),
-              ],
-            ),
-            if (_showContentEdit && _data.hasContent)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 70,
-                child: DetailEditPanel(
-                  data: _data,
-                  showCrossTracker: _crossTrackerEnabled && _hasOtherTrackers,
-                  live: _liveStatus,
-                  onUpdate: (success) {
-                    if (success) _loadMal();
-                  },
-                  onLiveStatus: (live) => setState(() => _liveStatus = live),
-                  onDelete: () {
-                    setState(() => _showContentEdit = false);
-                    _loadMal();
-                  },
-                  onClose: () => setState(() => _showContentEdit = false),
-                ),
-              ),
-          ],
-        ),
+    return Scaffold(
+      floatingActionButton: buildDetailFab(
+        data: _data,
+        editOpen: _showContentEdit,
+        onPressed: _toggleEdit,
+      ),
+      floatingActionButtonAnimator: NoScalingAnimation(),
+      body: CustomScrollView(
+        key: _listKey,
+        controller: _scroll,
+        slivers: [
+          _appBar(context),
+          _body(),
+          const SliverWrapper(SizedBox(height: 80)),
+        ],
       ),
     );
   }
 
-  void _toggleEdit() {
-    if (mounted) setState(() => _showContentEdit = !_showContentEdit);
+  Future<void> _toggleEdit() async {
+    if (!mounted || !_data.hasContent) return;
+    if (_showContentEdit) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    setState(() => _showContentEdit = true);
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheetContext) => DetailEditPanel(
+          data: _data,
+          showCrossTracker: _crossTrackerEnabled && _hasOtherTrackers,
+          live: _liveStatus,
+          onUpdate: (success) {
+            if (success) _loadMal();
+          },
+          onLiveStatus: (live) {
+            if (mounted) setState(() => _liveStatus = live);
+          },
+          onDelete: () {
+            Navigator.of(sheetContext).pop();
+            if (mounted) _loadMal();
+          },
+          onClose: () => Navigator.of(sheetContext).pop(),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _showContentEdit = false);
+    }
   }
 
   SliverAppBar _appBar(BuildContext context) {
@@ -394,9 +392,13 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
       ),
       toolbarHeight: DetailHeader.toolbarHeight,
       title: ValueListenableBuilder<bool>(
-        valueListenable: _scrollingUp,
-        builder: (context, up, _) =>
-            up ? const SizedBox.shrink() : Text(_title),
+        valueListenable: _showAppBarTitle,
+        builder: (context, show, child) => AnimatedOpacity(
+          opacity: show ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 180),
+          child: child,
+        ),
+        child: Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.pin,

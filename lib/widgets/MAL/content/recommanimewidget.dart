@@ -9,11 +9,13 @@ class RecommendedAnimeWidget extends StatelessWidget {
   final List<Recommendation> recommAnime;
   final String category;
   final double horizPadding;
+  final VoidCallback? onViewAll;
   const RecommendedAnimeWidget(
       {super.key,
       required this.recommAnime,
       this.category = "anime",
-      required this.horizPadding});
+      required this.horizPadding,
+      this.onViewAll});
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +34,7 @@ class RecommendedAnimeWidget extends StatelessWidget {
           height: cardHeight,
           tileWidth: cardWidth,
           tileHeight: cardHeight,
+          onViewAll: onViewAll,
         );
       },
     );

@@ -188,27 +188,87 @@ class AnimeGraphData {
 
   /// The edges to lay out for [order].
   ///
-  /// [GraphOrder.fromSelected] keeps them as sent. [GraphOrder.bySequel] turns every prequel
-  /// into a sequel pointing the other way and orients the remaining relations from the older
-  /// title to the newer one (unchanged when a date is missing), so the layers read as time.
+  /// [GraphOrder.fromSelected] keeps them as sent (deterministically sorted).
+  /// [GraphOrder.bySequel] orients edges by semantic relation hierarchy first
+  /// (prequel → reversed sequel, parentStory → reversed sideStory, fullStory →
+  /// reversed summary, derivative relations kept parent → derivative, symmetric
+  /// relations ordered older → newer with ID tie-breaker), deduplicates per
+  /// unordered node pair preferring `sequel`, and sorts the primary spine first
+  /// so Sugiyama layout minimizes crossings.
   List<GraphEdgeData> orderedEdges(GraphOrder order) {
-    if (order == GraphOrder.fromSelected) return edges;
-    final result = <GraphEdgeData>{};
+    if (order == GraphOrder.fromSelected) {
+      return _sortDeterministic(edges);
+    }
+    final byPair = <(int, int), GraphEdgeData>{};
     for (final edge in edges) {
-      if (edge.relation == GraphRelation.prequel) {
-        result
-            .add(GraphEdgeData(edge.target, edge.source, GraphRelation.sequel));
-      } else if (edge.relation == GraphRelation.sequel) {
-        result.add(edge);
-      } else {
-        final a = nodes[edge.source]?.releaseKey;
-        final b = nodes[edge.target]?.releaseKey;
-        final flip = a != null && b != null && a > b;
-        result.add(flip
-            ? GraphEdgeData(edge.target, edge.source, edge.relation)
-            : edge);
+      final GraphEdgeData oriented;
+      switch (edge.relation) {
+        case GraphRelation.prequel:
+          oriented = GraphEdgeData(edge.target, edge.source, GraphRelation.sequel);
+        case GraphRelation.sequel:
+          oriented = edge;
+        case GraphRelation.parentStory:
+          oriented = GraphEdgeData(edge.target, edge.source, GraphRelation.sideStory);
+        case GraphRelation.fullStory:
+          oriented = GraphEdgeData(edge.target, edge.source, GraphRelation.summary);
+        case GraphRelation.sideStory:
+        case GraphRelation.summary:
+        case GraphRelation.spinOff:
+          oriented = edge;
+        case GraphRelation.alternativeVersion:
+        case GraphRelation.alternativeSetting:
+        case GraphRelation.character:
+        case GraphRelation.other:
+          final a = nodes[edge.source]?.releaseKey;
+          final b = nodes[edge.target]?.releaseKey;
+          final flip = (a != null && b != null && a != b)
+              ? a > b
+              : edge.source > edge.target;
+          oriented = flip
+              ? GraphEdgeData(edge.target, edge.source, edge.relation)
+              : edge;
+      }
+      final pair = oriented.source < oriented.target
+          ? (oriented.source, oriented.target)
+          : (oriented.target, oriented.source);
+      final existing = byPair[pair];
+      if (existing == null ||
+          _edgeRank(oriented.relation) < _edgeRank(existing.relation)) {
+        byPair[pair] = oriented;
       }
     }
-    return result.toList();
+    return _sortDeterministic(byPair.values.toList());
+  }
+
+  static int _edgeRank(GraphRelation r) => switch (r) {
+        GraphRelation.sequel => 0,
+        GraphRelation.prequel => 1,
+        GraphRelation.sideStory => 2,
+        GraphRelation.parentStory => 3,
+        GraphRelation.summary => 4,
+        GraphRelation.fullStory => 5,
+        GraphRelation.spinOff => 6,
+        GraphRelation.alternativeVersion => 7,
+        GraphRelation.alternativeSetting => 8,
+        GraphRelation.character => 9,
+        GraphRelation.other => 10,
+      };
+
+  List<GraphEdgeData> _sortDeterministic(List<GraphEdgeData> list) {
+    final sorted = List<GraphEdgeData>.of(list);
+    int relKey(int id) => nodes[id]?.releaseKey ?? 999999;
+    sorted.sort((a, b) {
+      final aPrimary = a.relation == GraphRelation.sequel || a.relation == GraphRelation.prequel ? 0 : 1;
+      final bPrimary = b.relation == GraphRelation.sequel || b.relation == GraphRelation.prequel ? 0 : 1;
+      if (aPrimary != bPrimary) return aPrimary.compareTo(bPrimary);
+      final bySourceDate = relKey(a.source).compareTo(relKey(b.source));
+      if (bySourceDate != 0) return bySourceDate;
+      final byTargetDate = relKey(a.target).compareTo(relKey(b.target));
+      if (byTargetDate != 0) return byTargetDate;
+      final bySourceId = a.source.compareTo(b.source);
+      if (bySourceId != 0) return bySourceId;
+      return a.target.compareTo(b.target);
+    });
+    return sorted;
   }
 }

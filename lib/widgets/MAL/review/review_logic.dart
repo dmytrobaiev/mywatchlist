@@ -33,12 +33,25 @@ Map<int, int> reviewScoreDistribution(Iterable<AnimeReview> reviews) {
   return result;
 }
 
-/// Every tag used by [reviews], in order of first appearance.
+/// Normalizes scraped review tags so `Preliminary (6/28 eps)`, `Preliminary (12/28 eps)`,
+/// etc. group into a single `Preliminary` filter chip while cards keep their exact text.
+String normalizeReviewTag(String tag) {
+  final trimmed = tag.trim();
+  if (trimmed.toLowerCase().startsWith('preliminary')) return 'Preliminary';
+  return trimmed;
+}
+
+/// Every normalized tag used by [reviews], in order of first appearance.
 List<String> reviewTags(Iterable<AnimeReview> reviews) {
   final tags = <String>{};
   for (final review in reviews) {
     final own = review.tags;
-    if (own != null) tags.addAll(own);
+    if (own != null) {
+      for (final tag in own) {
+        final normalized = normalizeReviewTag(tag);
+        if (normalized.isNotEmpty) tags.add(normalized);
+      }
+    }
   }
   return tags.toList();
 }
@@ -51,11 +64,14 @@ List<AnimeReview> filterReviews(
   int? score,
   Set<String> tags = const {},
 }) {
+  final normalizedFilterTags = tags.map(normalizeReviewTag).toSet();
   var result = reviews.where((review) {
     if (score != null && review.score != score) return false;
-    if (tags.isNotEmpty) {
+    if (normalizedFilterTags.isNotEmpty) {
       final own = review.tags;
-      if (own == null || !own.any(tags.contains)) return false;
+      if (own == null || !own.any((t) => normalizedFilterTags.contains(normalizeReviewTag(t)))) {
+        return false;
+      }
     }
     return true;
   }).toList();

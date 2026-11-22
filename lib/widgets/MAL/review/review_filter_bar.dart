@@ -42,18 +42,11 @@ class ReviewFilterBar extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
   });
 
-  void _showDistribution(BuildContext context) {
-    if (distribution.isEmpty) return;
-    showDialog<void>(
-      context: context,
-      builder: (_) => ReviewDistributionDialog(distribution: distribution),
-    );
-  }
+  static const List<int> _allScores = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scores = distribution.keys.toList()..sort();
     return Padding(
       padding: padding,
       child: SizedBox(
@@ -61,17 +54,8 @@ class ReviewFilterBar extends StatelessWidget {
         child: ListView(
           scrollDirection: Axis.horizontal,
           children: [
-            if (distribution.isNotEmpty)
-              IconButton(
-                tooltip: S.current.Social_Reviews_Score_Distribution,
-                onPressed: () => _showDistribution(context),
-                icon: Icon(Icons.bar_chart, size: 20, color: theme.colorScheme.primary),
-                visualDensity: VisualDensity.compact,
-              ),
-            if (scores.isNotEmpty) ...[
-              _buildScoreSelect(theme, scores),
-              const SizedBox(width: 8),
-            ],
+            _buildScoreSelect(theme),
+            const SizedBox(width: 8),
             _buildSortSelect(theme),
             for (final tag in tags) _buildTagButton(theme, tag),
           ],
@@ -124,7 +108,7 @@ class ReviewFilterBar extends StatelessWidget {
     );
   }
 
-  Widget _buildScoreSelect(ThemeData theme, List<int> scores) {
+  Widget _buildScoreSelect(ThemeData theme) {
     final selected = filters.score;
     final foreground = selected != null ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurfaceVariant;
     return PopupMenuButton<int>(
@@ -132,11 +116,12 @@ class ReviewFilterBar extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onSelected: (value) => onChanged(filters.copyWith(score: () => value)),
       itemBuilder: (_) => [
-        for (final score in scores.reversed)
+        for (final score in _allScores)
           PopupMenuItem<int>(
             value: score,
             height: 40,
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Image.asset('assets/images/star.png', height: 16),
                 const SizedBox(width: 8),
@@ -146,12 +131,6 @@ class ReviewFilterBar extends StatelessWidget {
                     fontWeight: score == selected ? FontWeight.w600 : FontWeight.normal,
                     color: score == selected ? theme.colorScheme.primary : null,
                   ),
-                ),
-                const Spacer(),
-                const SizedBox(width: 16),
-                Text(
-                  '${distribution[score] ?? 0}',
-                  style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ],
             ),

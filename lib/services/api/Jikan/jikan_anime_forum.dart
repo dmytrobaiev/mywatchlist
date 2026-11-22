@@ -1,3 +1,5 @@
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+
 class AnimeForum {
   final int? malId;
   final String? url;
@@ -20,15 +22,23 @@ class AnimeForum {
   });
 
   factory AnimeForum.fromJson(Map<String, dynamic> json) {
+    final id = jikanInt(json['topicId'] ?? json['malId'] ?? json['mal_id']);
+    final lastCommentMap = jikanMap(json['lastComment'] ?? json['last_comment']);
+    final lastPostBy = jikanStr(json['lastPostBy']);
+    final LastComment? lastComment = lastCommentMap != null
+        ? LastComment.fromJson(lastCommentMap)
+        : (lastPostBy != null ? LastComment(authorUsername: lastPostBy) : null);
+
     return AnimeForum(
-      malId: json['mal_id'],
-      url: json['url'],
-      title: json['title'],
-      date: json['date'],
-      authorUsername: json['author_username'],
-      authorUrl: json['author_url'],
-      comments: json['comments'],
-      lastComment: json['last_comment'] != null ? LastComment.fromJson(json['last_comment']) : null,
+      malId: id,
+      url: json['url'] as String? ??
+          (id != null ? 'https://myanimelist.net/forum/?topicid=$id' : null),
+      title: json['title'] as String?,
+      date: (json['startedDate'] ?? json['date']) as String?,
+      authorUsername: (json['startedBy'] ?? json['authorUsername'] ?? json['author_username']) as String?,
+      authorUrl: (json['authorUrl'] ?? json['author_url']) as String?,
+      comments: jikanInt(json['replies'] ?? json['comments']),
+      lastComment: lastComment,
     );
   }
 }
@@ -48,10 +58,10 @@ class LastComment {
 
   factory LastComment.fromJson(Map<String, dynamic> json) {
     return LastComment(
-      url: json['url'],
-      authorUsername: json['author_username'],
-      authorUrl: json['author_url'],
-      date: json['date'],
+      url: json['url'] as String?,
+      authorUsername: (json['authorUsername'] ?? json['author_username']) as String?,
+      authorUrl: (json['authorUrl'] ?? json['author_url']) as String?,
+      date: json['date'] as String?,
     );
   }
 }
@@ -63,7 +73,10 @@ class AnimeForumResponse {
 
   factory AnimeForumResponse.fromJson(Map<String, dynamic> json) {
     return AnimeForumResponse(
-      data: (json['data'] as List).map((e) => AnimeForum.fromJson(e)).toList(),
+      data: ((json['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => AnimeForum.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
     );
   }
 }

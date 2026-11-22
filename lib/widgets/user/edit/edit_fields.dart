@@ -31,14 +31,14 @@ class FieldCaption extends StatelessWidget {
       height: 32,
       child: Row(
         children: [
-          Flexible(
+          Expanded(
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelLarge,
             ),
           ),
-          if (action != null) ...[const Spacer(), action!],
+          if (action != null) action!,
         ],
       ),
     );

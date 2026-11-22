@@ -1068,11 +1068,12 @@ class MalApi {
       final size = int.tryParse(u.queryParameters['limit'] ?? '') ??
           JikanApi.topPageSize;
       final page = int.tryParse(u.queryParameters['page'] ?? '') ?? 1;
+      final sfwParam = u.queryParameters['sfw'];
       return JikanApi().getTopAnimeResult(
           type: u.queryParameters['type'] ?? 'ona',
           limit: size,
           offset: (page - 1) * size,
-          sfw: u.queryParameters['sfw'] == 'true');
+          sfw: sfwParam != null ? sfwParam == 'true' : !Preferences.general.nsfw);
     }
 
     final response = await _get(url);
