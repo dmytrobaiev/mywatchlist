@@ -276,8 +276,8 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
 
     // Show starting from the Media section (or the first section after Synopsis).
     TabType? trigger;
-    if (_tabTypes.contains(TabType.media)) {
-      trigger = TabType.media;
+    if (_tabTypes.contains(TabType.Media)) {
+      trigger = TabType.Media;
     } else if (_tabTypes.length > 1) {
       trigger = _tabTypes[1];
     }

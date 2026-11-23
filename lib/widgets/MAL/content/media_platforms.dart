@@ -6,7 +6,6 @@ import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/services/api/mwl_api.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
-import 'package:mywatchlist/widgets/common/avatar_widget.dart';
 import 'package:mywatchlist/widgets/common/custombutton.dart';
 
 export 'package:mwl_commons/src/model/html/anime_detailed_html.dart' show LinkType;

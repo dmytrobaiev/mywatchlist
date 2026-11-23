@@ -24,8 +24,6 @@ void main() {
   });
 
   group('JikanClient UTF-8 decoding when charset is omitted', () {
-    tearDown(() => JikanClient.instance.resetForTest());
-
     test('decodes em-dashes and Japanese kanji without mojibake', () async {
       final payload = jsonEncode({
         'data': {
@@ -35,14 +33,14 @@ void main() {
         },
       });
       final utf8Bytes = utf8.encode(payload);
-      JikanClient.instance.resetForTest(
+      final client = JikanClient(
         client: MockClient((_) async => http.Response.bytes(
               utf8Bytes,
               200,
               headers: {'content-type': 'application/json'},
             )),
       );
-      final res = await JikanClient.instance
+      final res = await client
           .get(Uri.parse('https://jikan.lucashdo.com/v1/people/49635/full'));
       final decoded = jsonDecode(res.body) as Map<String, dynamic>;
       final data = decoded['data'] as Map<String, dynamic>;
@@ -139,7 +137,7 @@ YouTube: @KitoAkari_Official
       expect(result.newsorfeatured.first.id, 71234567);
       expect(result.newsorfeatured.first.title, 'Frieren Season 2 Announced');
       expect(result.newsorfeatured.first.tags, 'Anime');
-      expect(result.paging?.next, '?p=2');
+      expect(result.paging.next, '?p=2');
     });
   });
 
@@ -251,7 +249,10 @@ YouTube: @KitoAkari_Official
   });
 
   group('openInBrowser bypasses internalLinkHandler', () {
-    tearDown(WebLauncher.reset);
+    tearDown(() {
+      WebLauncher.internalLinkHandler = null;
+      WebLauncher.opener = defaultUrlOpener;
+    });
 
     testWidgets('launches externally without invoking DeepLinks internalLinkHandler', (tester) async {
       var internalCalled = false;

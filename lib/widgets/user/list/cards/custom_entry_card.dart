@@ -4,7 +4,6 @@ import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
 import 'package:mywatchlist/widgets/user/list/cards/entry_parts.dart';
 import 'package:mywatchlist/widgets/user/list/list_entry_view.dart';
-import 'package:mywatchlist/widgets/user/list/list_query.dart';
 
 /// A list row drawn from a custom card layout ([ContentCardProps], DailyAL
 /// `CustomizableFieldWidget`): each visible field at its saved position.

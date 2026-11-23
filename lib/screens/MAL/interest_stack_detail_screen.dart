@@ -69,7 +69,6 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
   String? _error;
 
   static const horizPadding = 25.0;
-  static const padding = EdgeInsets.symmetric(horizontal: horizPadding);
 
   @override
   void initState() {
@@ -294,7 +293,7 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
                   if (entriesCount > 0) ...[
                     const SizedBox(height: 4),
                     Text(
-                      '$entriesCount ${S.current.Social_Stack_Entries.toLowerCase()}',
+                      S.current.Social_Stack_Entries(entriesCount),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.bodySmall?.copyWith(

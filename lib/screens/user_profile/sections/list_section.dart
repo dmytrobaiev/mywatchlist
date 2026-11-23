@@ -12,7 +12,6 @@ import 'package:mywatchlist/utils/app_routes.dart';
 import 'package:mywatchlist/widgets/common/list_sort_filter.dart';
 import 'package:mywatchlist/widgets/user/list/cards/entry_cards.dart';
 import 'package:mywatchlist/widgets/user/list/cards/entry_parts.dart';
-import 'package:mywatchlist/widgets/user/edit/list_entry_service.dart';
 import 'package:mywatchlist/widgets/user/list/bulk/list_bulk.dart';
 import 'package:mywatchlist/widgets/user/list/cards/my_list_mark.dart';
 import 'package:mywatchlist/widgets/user/list/list_entry_view.dart';

@@ -99,10 +99,11 @@ class ProfileTabsSource {
       final user = jikanMap(map['user']);
       final name = (jikanStr(map['username']) ?? jikanStr(user?['username']) ?? '').trim();
       if (name.isEmpty) continue;
-      final img = jikanImageSizes(
+      final sizes = jikanImageSizes(
         user?['images'] ?? map['images'],
         fallbackImageUrl: jikanStr(map['imageUrl'] ?? map['image_url'] ?? user?['imageUrl']),
-      ).best;
+      );
+      final img = sizes.medium ?? sizes.large ?? sizes.small;
       final lastOnline = jikanStr(map['lastOnline'] ?? map['last_online']);
       final friendsSince = jikanStr(map['friendsSince'] ?? map['friends_since']);
       friends.add(ProfileFriend(

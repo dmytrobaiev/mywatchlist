@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mywatchlist/constants/constants.dart' show text;
 import 'package:mywatchlist/screens/MAL/detail/detail_sections.dart';
 import 'package:mywatchlist/widgets/common/custombutton.dart';
 
@@ -31,10 +30,11 @@ class DetailSectionFrame extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: text(
+                  child: Text(
                     section.title,
-                    fontSize: 22,
-                    textOverflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 22),
                   ),
                 ),
                 if (trailing != null) ...[
