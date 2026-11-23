@@ -34,9 +34,10 @@ void main() {
       expect(filterReviews(reviews, sort: ReviewSort.oldest).map((r) => r.user!.username), ['d', 'c', 'b', 'a']);
     });
 
-    test('sorts by score', () {
+    test('sorts by score (unscored last)', () {
       expect(filterReviews(reviews, sort: ReviewSort.highest).first.score, 9);
-      expect(filterReviews(reviews, sort: ReviewSort.lowest).first.score, isNull);
+      expect(filterReviews(reviews, sort: ReviewSort.lowest).first.score, 5);
+      expect(filterReviews(reviews, sort: ReviewSort.lowest).last.score, isNull);
     });
 
     test('filters by score and by any selected tag', () {

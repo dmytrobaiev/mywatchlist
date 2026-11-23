@@ -129,7 +129,7 @@ List<AnimeReview> filterReviews(
           return 1;
         }
         final idCmp = (a.$2.malId ?? 0).compareTo(b.$2.malId ?? 0);
-        return idCmp != 0 ? idCmp : a.$1.compareTo(b.$1);
+        return idCmp != 0 ? idCmp : b.$1.compareTo(a.$1);
       });
     case ReviewSort.highest:
       indexed.sort((a, b) {
