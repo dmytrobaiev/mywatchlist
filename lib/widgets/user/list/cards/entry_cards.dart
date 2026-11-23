@@ -545,17 +545,17 @@ class EntryGridCard extends StatelessWidget {
           children: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(5, 0, 5, 8),
+                padding: const EdgeInsetsDirectional.fromSTEB(5, 0, 2, 8),
                 child: Text(
                   entry.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, height: 1.2, color: tokens.onImageScrim),
+                  style: TextStyle(fontSize: 13, height: 1.2, color: tokens.onImageScrim),
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            GridEditButton(entry: entry, onEdit: onEdit),
+            const SizedBox(width: 4),
+            GridEditButton(entry: entry, onEdit: onEdit, compactIconOnly: true),
           ],
         ),
       ),
@@ -669,11 +669,19 @@ class GridCardBar extends StatelessWidget {
 
 /// Edit button of the compact grid card (DailyAL `editIconButton`): in the
 /// status colour, the user's score with a star when scored, else a pencil.
+/// When [compactIconOnly] is true, always uses the compact 30x30 edit icon
+/// colored by status so narrow 3-column titles aren't squeezed.
 class GridEditButton extends StatelessWidget {
   final ListEntryView entry;
   final VoidCallback? onEdit;
+  final bool compactIconOnly;
 
-  const GridEditButton({super.key, required this.entry, required this.onEdit});
+  const GridEditButton({
+    super.key,
+    required this.entry,
+    required this.onEdit,
+    this.compactIconOnly = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -683,7 +691,7 @@ class GridEditButton extends StatelessWidget {
     final foreground = role?.onContainer ?? scheme.onSurface;
     final score = entry.status == null ? null : ListEntryLookScope.of(context).userScore(entry);
     final hidden = scoreHiddenOf(context);
-    final scored = score != null && !hidden;
+    final scored = !compactIconOnly && score != null && !hidden;
     final Widget child = scored
         ? Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),

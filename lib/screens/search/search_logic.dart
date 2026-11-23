@@ -50,44 +50,46 @@ extension _SearchLogic on _GeneralSearchScreenState {
     });
   }
 
+  ({String category, SearchFilters filters})? _presetForQuery(String query) {
+    if (!query.startsWith('#')) return null;
+    final special = SpecialQuery.parse(query.substring(1));
+    if (special is RankingQuery) {
+      return (category: special.category, filters: SearchFilters.forAnimeRanking(special.type));
+    }
+    if (special is MangaRankingQuery) {
+      return (category: SearchCategory.manga, filters: SearchFilters.forMangaRanking(special.type));
+    }
+    if (special is SeasonQuery) {
+      return (category: SearchCategory.anime, filters: SearchFilters.forSeason(special.season, special.year));
+    }
+    return null;
+  }
+
   Future<void> _runSearch(String raw) async {
     var query = raw.trim();
-    if (query.startsWith('#')) {
-      final special = SpecialQuery.parse(query.substring(1));
-      if (special is RankingQuery) {
-        _searchController.clear();
-        _set(() {
-          _specialQuery = false;
-          _category = special.category;
-          _filters = SearchFilters.forAnimeRanking(special.type);
-        });
-        query = '';
-      } else if (special is MangaRankingQuery) {
-        _searchController.clear();
-        _set(() {
-          _specialQuery = false;
-          _category = SearchCategory.manga;
-          _filters = SearchFilters.forMangaRanking(special.type);
-        });
-        query = '';
-      } else if (special is SeasonQuery) {
-        _searchController.clear();
-        _set(() {
-          _specialQuery = false;
-          _category = SearchCategory.anime;
-          _filters = SearchFilters.forSeason(special.season, special.year);
-        });
-        query = '';
-      }
+    final preset = _presetForQuery(query);
+    var effectiveCategory = _category;
+    var effectiveFilters = _filters;
+    var requestQuery = query;
+    if (preset != null) {
+      // Keep `#...` in the bar as a named preset backed by native SearchFilters.
+      effectiveCategory = preset.category;
+      effectiveFilters = preset.filters;
+      requestQuery = '';
+      _set(() {
+        _specialQuery = true;
+        _category = preset.category;
+        _filters = preset.filters;
+      });
     }
-    if (query.isEmpty && _filters.isEmpty && !SearchCategory.isBrowsable(_category)) return;
+    if (requestQuery.isEmpty && effectiveFilters.isEmpty && !SearchCategory.isBrowsable(effectiveCategory)) return;
     _suggestTimer?.cancel();
     _suggestToken++;
     _suggestions.value = SuggestionState.idle;
     _focusNode.unfocus();
-    if (query.isNotEmpty) _history.addQuery(query);
+    if (query.isNotEmpty && preset == null) _history.addQuery(query);
 
-    final request = SearchRequest(category: _category, query: query, filters: _filters);
+    final request = SearchRequest(category: effectiveCategory, query: requestQuery, filters: effectiveFilters);
     final token = ++_searchToken;
     _set(() {
       _showPanel = false;
@@ -170,7 +172,12 @@ extension _SearchLogic on _GeneralSearchScreenState {
       ..gridAxisCount = result.display.gridColumns
       ..gridHeight = result.display.gridHeight
       ..saveDisplaySettings();
-    final clearSpecial = _searchController.text.trim().startsWith('#');
+    final currentText = _searchController.text.trim();
+    final currentPreset = _presetForQuery(currentText);
+    final keepSpecialPreset = currentPreset != null &&
+        currentPreset.category == result.category &&
+        currentPreset.filters == result.filters;
+    final clearSpecial = currentText.startsWith('#') && !keepSpecialPreset;
     if (clearSpecial) _searchController.clear();
     _set(() {
       if (clearSpecial) _specialQuery = false;

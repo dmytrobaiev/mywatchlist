@@ -7,6 +7,8 @@ import 'package:html/parser.dart' as html;
 import 'package:http/http.dart' as http;
 import 'package:mwl_commons/mwl_commons.dart' show UserFriendsList;
 import 'package:mywatchlist/constants/constants.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
 import 'package:mywatchlist/services/api/MAL/models/club/club_html.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/anime_detailed_html.dart' show InterestStack;
 import 'package:mywatchlist/services/api/MAL/scrapper/html_parsers.dart';
@@ -35,6 +37,10 @@ class ProfileTabsSource {
   /// GET of one MAL page, body as text; throws on a non-200 status or after the timeout.
   static Future<String> Function(Uri url, Duration timeout) fetchPage = _fetchPage;
 
+  /// Primary jikan-edge routes for Friends & Clubs (overrideable in tests).
+  static Future<ProfileFriendsPage?> Function(String username) jikanFriends = _fetchJikanFriends;
+  static Future<List<ClubHtml>?> Function(String username) jikanClubs = _fetchJikanClubs;
+
   /// mwl-api routes (Jikan for friends, MAL pages parsed by the backend for the others).
   static Future<Map<String, dynamic>?> Function(String username, int page) apiFriends =
       (username, page) =>
@@ -53,12 +59,78 @@ class ProfileTabsSource {
   static void reset() {
     budget = const Duration(seconds: 12);
     fetchPage = _fetchPage;
+    jikanFriends = _fetchJikanFriends;
+    jikanClubs = _fetchJikanClubs;
     apiFriends = (username, page) =>
         MwlApi.i.getUserFriends(username, page: page, timeout: budget);
     apiHistory = (username, type) =>
         MwlApi.i.getUserHistory(username, type: type, timeout: budget);
     apiClubs = (username) => MwlApi.i.getUserClubs(username, timeout: budget);
     parseInline = false;
+  }
+
+  static Future<ProfileFriendsPage?> _fetchJikanFriends(String username) async {
+    if (JikanClient.instance.isUnreachable) return null;
+    final url = Uri.parse(
+        '${Constants.jikanV4}/users/${Uri.encodeComponent(username)}/friends');
+    final res = await JikanClient.instance.get(url);
+    if (res.statusCode != 200) return null;
+    return parseJikanFriendsJson(res.body);
+  }
+
+  static Future<List<ClubHtml>?> _fetchJikanClubs(String username) async {
+    if (JikanClient.instance.isUnreachable) return null;
+    final url = Uri.parse(
+        '${Constants.jikanV4}/users/${Uri.encodeComponent(username)}/clubs');
+    final res = await JikanClient.instance.get(url);
+    if (res.statusCode != 200) return null;
+    return parseJikanClubsJson(res.body);
+  }
+
+  /// Parses `jikan-edge` `/v1/users/{username}/friends` JSON (`data: [{username, imageUrl, lastOnline, friendsSince}]`).
+  static ProfileFriendsPage parseJikanFriendsJson(String body) {
+    final decoded = jsonDecode(body);
+    final rows = decoded is Map ? decoded['data'] : null;
+    if (rows is! List) return const ProfileFriendsPage([]);
+    final friends = <ProfileFriend>[];
+    for (final row in rows) {
+      if (row is! Map) continue;
+      final map = Map<String, dynamic>.from(row);
+      final user = jikanMap(map['user']);
+      final name = (jikanStr(map['username']) ?? jikanStr(user?['username']) ?? '').trim();
+      if (name.isEmpty) continue;
+      final img = jikanImageSizes(
+        user?['images'] ?? map['images'],
+        fallbackImageUrl: jikanStr(map['imageUrl'] ?? map['image_url'] ?? user?['imageUrl']),
+      ).best;
+      final lastOnline = jikanStr(map['lastOnline'] ?? map['last_online']);
+      final friendsSince = jikanStr(map['friendsSince'] ?? map['friends_since']);
+      friends.add(ProfileFriend(
+        username: name,
+        imageUrl: img,
+        lastOnline: lastOnline,
+        friendsSince: friendsSince,
+      ));
+    }
+    return ProfileFriendsPage(friends, hasNextPage: false);
+  }
+
+  /// Parses `jikan-edge` `/v1/users/{username}/clubs` JSON (`data: [{malId, name, url}]`).
+  static List<ClubHtml> parseJikanClubsJson(String body) {
+    final decoded = jsonDecode(body);
+    final rows = decoded is Map ? decoded['data'] : null;
+    if (rows is! List) return const [];
+    final seen = <int>{};
+    final out = <ClubHtml>[];
+    for (final row in rows) {
+      if (row is! Map) continue;
+      final map = Map<String, dynamic>.from(row);
+      final id = jikanInt(map['malId'] ?? map['mal_id'] ?? map['id']);
+      final name = jikanStr(map['name']);
+      if (id == null || name == null || !seen.add(id)) continue;
+      out.add(ClubHtml(id: id, name: name));
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------------------
@@ -70,7 +142,7 @@ class ProfileTabsSource {
   /// MAL's own "load more" endpoint, with no fallback (Jikan pages by 100 and would skip or
   /// repeat friends).
   static Future<ProfileFriendsPage> friends(String username,
-      {int page = 1, FriendsCursor? after}) {
+      {int page = 1, FriendsCursor? after}) async {
     if (after != null) {
       return () async {
         final body = await fetchPage(
@@ -85,6 +157,12 @@ class ProfileTabsSource {
         return _parse(parseFriendsJson, (body, after.userId));
       }()
           .timeout(budget + _minFallback);
+    }
+    if (page == 1) {
+      try {
+        final jikan = await jikanFriends(username).timeout(_primaryShare);
+        if (jikan != null) return jikan;
+      } catch (_) {}
     }
     return _withFallback<ProfileFriendsPage>(
       (timeout) async {
@@ -141,8 +219,12 @@ class ProfileTabsSource {
     return [...?results[0], ...?results[1]];
   }
 
-  /// The clubs a user belongs to.
-  static Future<List<ClubHtml>> clubs(String username) {
+  /// The clubs a user belongs to (jikan-edge first, falling back to MAL HTML / mwl-api).
+  static Future<List<ClubHtml>> clubs(String username) async {
+    try {
+      final jikan = await jikanClubs(username).timeout(_primaryShare);
+      if (jikan != null) return jikan;
+    } catch (_) {}
     return _withFallback<List<ClubHtml>>(
       (timeout) async {
         final body = await fetchPage(_profileUrl(username, 'clubs'), timeout);

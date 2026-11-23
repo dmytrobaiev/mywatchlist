@@ -112,7 +112,7 @@ class _FeaturedScreenState extends State<FeaturedScreen> {
                     if (article != null)
                       AppBarMenu(
                         onShare: () => _share(article),
-                        onOpenInBrowser: () => openLink(context, _pageUrl),
+                        onOpenInBrowser: () => openInBrowser(context, _pageUrl),
                       ),
                   ],
                   bottom: TabBar(

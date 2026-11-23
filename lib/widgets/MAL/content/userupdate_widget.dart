@@ -129,12 +129,39 @@ class _UpdateCard extends StatelessWidget {
 
   const _UpdateCard({required this.update, required this.category});
 
+  static String? _formatUpdateTime(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) return displayTimeAgo(parsed);
+    // jikan-edge returns human relative strings ("31 seconds ago", "2 minutes ago", "1 hour ago").
+    final trimmed = raw.trim();
+    final m = RegExp(
+      r'^(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago$',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
+    if (m != null) {
+      final n = m.group(1)!;
+      final unit = switch (m.group(2)!.toLowerCase()) {
+        'second' => 's',
+        'minute' => 'm',
+        'hour' => 'h',
+        'day' => 'd',
+        'week' => 'w',
+        'month' => 'mo',
+        'year' => 'y',
+        _ => '',
+      };
+      return '$n$unit ago';
+    }
+    return trimmed;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = update.status;
     final nsv = status == null ? null : NodeStatusValue.fromString(statusKey(status));
-    final date = DateTime.tryParse(update.date ?? '');
+    final timeLabel = _formatUpdateTime(update.date);
     final username = update.user?.username;
     final linkable = isLinkableUser(username);
 
@@ -152,22 +179,22 @@ class _UpdateCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    children: [
-                      RoundAvatar(size: 45, url: update.user?.images?.jpg?.imageUrl),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: 80,
-                        child: Text(
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        RoundAvatar(size: 40, url: update.user?.images?.jpg?.imageUrl),
+                        const SizedBox(height: 8),
+                        Text(
                           username ?? S.current.Social_Review_Anonymous,
-                          textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   category == 'manga' ? _mangaProgress(context) : _episodeProgress(context),
                 ],
               ),
@@ -176,14 +203,13 @@ class _UpdateCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Padding(
-                    padding: const EdgeInsetsDirectional.only(end: 10),
+                    padding: const EdgeInsetsDirectional.only(end: 8),
                     child: ReviewScoreBadge(score: update.score, size: 14),
                   ),
-                  if (date != null)
-                    // Shrinks rather than overflowing the card ("3 weeks ago").
+                  if (timeLabel != null)
                     Flexible(
                       child: Text(
-                        displayTimeAgo(date),
+                        timeLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, fontSize: 12),

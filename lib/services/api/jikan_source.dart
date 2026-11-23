@@ -13,7 +13,7 @@ enum DataSource {
 
   /// Brand name of the server (never translated).
   String get label => switch (this) {
-        DataSource.jikan => 'Jikan',
+        DataSource.jikan => 'Jikan Edge',
         DataSource.tenrai => 'Tenrai',
       };
 }

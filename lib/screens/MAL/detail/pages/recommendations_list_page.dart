@@ -44,15 +44,22 @@ class _RecommendationsListPageState extends State<RecommendationsListPage> {
     final items = widget.recommendations;
     return Scaffold(
       appBar: AppBar(
-        title: Text(S.current.Recommendations),
+        titleSpacing: 0,
+        title: Text(
+          S.current.Recommendations,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           IconButton(
             tooltip: _grid ? 'List view' : 'Grid view',
+            visualDensity: VisualDensity.compact,
             icon: Icon(_grid ? Icons.view_list_rounded : Icons.grid_view_rounded),
             onPressed: () => setState(() => _grid = !_grid),
           ),
           IconButton(
             tooltip: S.current.Edit_Comments,
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.comment_outlined),
             onPressed: _openComments,
           ),
@@ -71,32 +78,34 @@ class _RecommendationsListPageState extends State<RecommendationsListPage> {
       itemBuilder: (context, index) {
         final rec = items[index];
         final count = rec.numRecommendations;
-        return Stack(
-          alignment: AlignmentDirectional.centerEnd,
-          children: [
-            MediaTile(item: rec.animenode, category: widget.category),
-            if (count > 0)
-              PositionedDirectional(
-                top: 10,
-                end: 16,
-                child: IgnorePointer(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: scheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$count',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onSecondaryContainer,
-                        fontWeight: FontWeight.w600,
+        return MediaTile(
+          item: rec.animenode,
+          category: widget.category,
+          size: MediaTileSize.compact,
+          showEdit: true,
+          thumbOverlay: count > 0
+              ? PositionedDirectional(
+                  bottom: 2,
+                  end: 2,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: scheme.secondaryContainer.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 10,
+                          color: scheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-          ],
+                )
+              : null,
         );
       },
     );

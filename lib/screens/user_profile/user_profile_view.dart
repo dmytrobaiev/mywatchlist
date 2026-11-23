@@ -85,7 +85,12 @@ class _UserProfileViewState extends State<UserProfileView> {
   UserProfileData? _data;
   Object? _error;
 
-  bool get _isSelf => widget.username == null;
+  bool get _isSelf {
+    final name = widget.username?.trim();
+    if (name == null || name.isEmpty) return true;
+    final own = UserProfileRepository.ownUsername?.trim();
+    return own != null && own.isNotEmpty && name.toLowerCase() == own.toLowerCase();
+  }
 
   @override
   void initState() {
@@ -312,13 +317,13 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
                 ),
               AppBarMenu(
                 onShare: _share,
-                onOpenInBrowser: () => openLink(context, data.profileUrl),
+                onOpenInBrowser: () => openInBrowser(context, data.profileUrl),
                 items: [
                   if (widget.isSelf)
                     AppBarMenuItem(
                       label: s.Prof_Edit_Profile,
                       icon: Icons.edit_outlined,
-                      onTap: () => openLink(context, 'https://myanimelist.net/editprofile.php'),
+                      onTap: () => openInBrowser(context, 'https://myanimelist.net/editprofile.php'),
                     )
                   else ...[
                     AppBarMenuItem(

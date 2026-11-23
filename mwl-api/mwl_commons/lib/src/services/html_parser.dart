@@ -80,17 +80,21 @@ class HtmlParsers {
         .map((element) {
           var linkElement = element.querySelector('.title a');
           var title = linkElement != null ? linkElement.text.trim() : '';
-          var url =
-              linkElement != null ? linkElement.attributes['href']!.trim() : '';
+          var url = linkElement?.attributes['href']?.trim() ?? '';
 
           int id = 0;
           if (url.startsWith(Constants.malnewsUrl)) {
-            id = int.parse(
-                url.replaceFirst('${Constants.malnewsUrl}/', '').split('/')[0]);
+            id = int.tryParse(
+                    url.replaceFirst('${Constants.malnewsUrl}/', '').split('/')[0]) ??
+                0;
           } else if (url.startsWith(Constants.malfeaturedUrl)) {
-            id = int.parse(url
-                .replaceFirst('${Constants.malfeaturedUrl}/', '')
-                .split('/')[0]);
+            id = int.tryParse(url
+                    .replaceFirst('${Constants.malfeaturedUrl}/', '')
+                    .split('/')[0]) ??
+                0;
+          } else {
+            final match = RegExp(r'/(?:news|featured)/(\d+)').firstMatch(url);
+            id = int.tryParse(match?.group(1) ?? '') ?? 0;
           }
 
           var textElement = element.querySelector('.text');

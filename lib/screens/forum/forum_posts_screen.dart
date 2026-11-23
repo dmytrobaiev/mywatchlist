@@ -311,7 +311,7 @@ class _ForumPostsScreenState extends State<ForumPostsScreen> {
                           ],
                         ),
                 onOpenInBrowser:
-                    _topicUrl == null ? null : () => launchWebView(_topicUrl!, context: context),
+                    _topicUrl == null ? null : () => openInBrowser(context, _topicUrl!),
               ),
             ],
       bottom: _showPages ? _PageSelector(current: _pageIndex, total: _totalPages, onSelected: _changePage) : null,

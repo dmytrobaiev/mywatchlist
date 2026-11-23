@@ -128,7 +128,7 @@ class _ClubScreenState extends State<ClubScreen> {
 
   Widget _menu() => AppBarMenu(
         onShare: _share,
-        onOpenInBrowser: () => launchWebView(ForumUrls.club(_id), context: context),
+        onOpenInBrowser: () => openInBrowser(context, ForumUrls.club(_id)),
       );
 
   @override

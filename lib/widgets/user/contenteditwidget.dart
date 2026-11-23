@@ -601,12 +601,13 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
                 size: 20),
           )
         : null;
-    final caption = FieldCaption(S.current.Edit_Episodes_Seen, action: toggle);
+    final statusCaption = FieldCaption(S.current.Status, action: toggle);
+    final caption = FieldCaption(S.current.Edit_Episodes_Seen);
     if (useBar) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FieldCaption(S.current.Status),
+          statusCaption,
           _statusButton(entry),
           const SizedBox(height: 8),
           caption,
@@ -630,7 +631,7 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [FieldCaption(S.current.Status), _statusButton(entry)],
+            children: [statusCaption, _statusButton(entry)],
           ),
         ),
         const SizedBox(width: 12),

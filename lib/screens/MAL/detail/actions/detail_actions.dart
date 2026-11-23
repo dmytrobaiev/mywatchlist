@@ -83,7 +83,7 @@ Widget? overflowMenuAction(BuildContext context, DetailData data) {
   final canShare = data.title.isNotEmpty;
   return AppBarMenu(
     onShare: canShare ? () => shareDetail(context, data) : null,
-    onOpenInBrowser: () => openLink(context, detailPageUrl(data)),
+    onOpenInBrowser: () => openInBrowser(context, detailPageUrl(data)),
     items: [
       if (data.hasContent)
         AppBarMenuItem(

@@ -125,13 +125,15 @@ class CustomEntryCard extends StatelessWidget {
       case CustomizableFieldType.image:
         return EntryCover(entry: entry, width: props.imageWidth, height: (props.height - 8).clamp(24.0, 400.0));
       case CustomizableFieldType.media_type:
-        return Text(entry.mediaType == null ? '' : mediaTypeLabel(entry.mediaType!),
-            style: theme.textTheme.labelMedium);
+        final line = mediaLine(entry);
+        return Text(line,
+            maxLines: 1, overflow: TextOverflow.ellipsis, style: muted);
       case CustomizableFieldType.mean_score:
         return MeanScore(entry: entry);
       case CustomizableFieldType.num_list_users:
         final members = entry.members;
-        return Text(members == null ? '' : NumberFormat.compact(locale: locale).format(members),
+        return Text(
+            members == null ? '' : '(${NumberFormat.compact(locale: locale).format(members)})',
             style: muted);
       case CustomizableFieldType.list_status:
         return StatusPill(entry: entry);
@@ -181,10 +183,16 @@ class CustomEntryCard extends StatelessWidget {
       case CustomizableFieldType.next_episode_full_counter:
         final text = airingText(entry, now, locale);
         if (text == null) return const SizedBox.shrink();
-        return Text(text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary));
+        return Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.schedule_rounded, size: 13, color: theme.colorScheme.primary),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+          ),
+        ]);
       case CustomizableFieldType.time_left:
         final left = entry.timeLeft;
         if (left == null || left == Duration.zero) return const SizedBox.shrink();
@@ -196,6 +204,8 @@ class CustomEntryCard extends StatelessWidget {
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: muted),
           ),
         ]);
+      case CustomizableFieldType.progress_bar:
+        return EntryProgressBar(entry: entry);
     }
   }
 

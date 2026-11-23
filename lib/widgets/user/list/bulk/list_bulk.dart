@@ -209,11 +209,15 @@ class _ActionButton extends StatelessWidget {
         ? FilledButton.styleFrom(backgroundColor: scheme.errorContainer, foregroundColor: scheme.onErrorContainer)
         : null;
     return FilledButton.tonalIcon(
-      style: style?.copyWith(padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 10))) ??
-          const ButtonStyle(padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 10))),
+      style: style?.copyWith(padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 8))) ??
+          const ButtonStyle(padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 8))),
       onPressed: action.onPressed,
       icon: Icon(action.icon, size: 18),
-      label: Text(action.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(action.label, maxLines: 1),
+      ),
     );
   }
 }

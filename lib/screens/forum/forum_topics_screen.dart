@@ -104,7 +104,7 @@ class _ForumTopicsScreenState extends State<ForumTopicsScreen> {
                 ShareField(label: S.current.Fc_Field_Link, value: _url),
               ],
             ),
-            onOpenInBrowser: () => launchWebView(_url, context: context),
+            onOpenInBrowser: () => openInBrowser(context, _url),
           ),
         ],
       ),

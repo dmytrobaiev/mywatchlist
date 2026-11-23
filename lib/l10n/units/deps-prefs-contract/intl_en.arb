@@ -31,5 +31,7 @@
   "Card_Field_Airing_Date": "Airing date",
   "Card_Field_Airing_Date_Desc": "Date and time the next episode airs",
   "Card_Field_Next_Episode_Full": "Next episode (full)",
-  "Card_Field_Next_Episode_Full_Desc": "Full countdown to the next episode"
+  "Card_Field_Next_Episode_Full_Desc": "Full countdown to the next episode",
+  "Card_Field_Progress_Bar": "Progress bar",
+  "Card_Field_Progress_Bar_Desc": "Watch or read progress bar"
 }

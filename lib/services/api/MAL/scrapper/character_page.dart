@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -63,7 +65,7 @@ class MalCharacterPage {
     if (response.statusCode != 200) {
       throw http.ClientException('MAL answered ${response.statusCode}', url);
     }
-    return response.body;
+    return utf8.decode(response.bodyBytes, allowMalformed: true);
   }
 }
 
@@ -394,13 +396,26 @@ String? _imageUrl(Element? img) {
 }
 
 /// Text of [node] with `br` and list items as line breaks; scripts, styles
-/// and buttons (the spoiler toggle) skipped.
+/// and buttons (the spoiler toggle) skipped, and `.spoiler` blocks wrapped in
+/// `[Spoiler]...[/Spoiler]` tags so the UI renders collapsible spoiler cards.
 void _writeText(Node node, StringBuffer out) {
   if (node is Text) {
     out.write(node.text.replaceAll(RegExp(r'\s+'), ' '));
     return;
   }
   if (node is! Element) return;
+  if (node.classes.contains('spoiler')) {
+    final content = node.querySelector('.spoiler_content') ?? node;
+    final inner = StringBuffer();
+    for (final child in content.nodes) {
+      _writeText(child, inner);
+    }
+    final text = _cleanBlock(inner.toString());
+    if (text.isNotEmpty) {
+      out.write('\n[Spoiler]\n$text\n[/Spoiler]\n');
+    }
+    return;
+  }
   switch (node.localName) {
     case 'script' || 'style' || 'noscript' || 'input' || 'button':
       return;

@@ -61,7 +61,7 @@ void main() {
     jikanAnswers = true;
     await tester.tap(find.text(S.current.Dss_Test_Again));
     await tester.pumpAndSettle();
-    expect(find.text('Jikan'), findsOneWidget);
+    expect(find.text('Jikan Edge'), findsOneWidget);
     expect(find.textContaining('Nov'), findsNothing);
     expect(find.text(S.current.Dss_Jikan_Up), findsOneWidget);
   });

@@ -209,11 +209,11 @@ class JikanClient {
       if (source == null) _throwIfUnreachable(url);
       await _waitForSlot();
       if (source == null) _throwIfUnreachable(url);
-      final http.Response response;
+      final http.Response rawResponse;
       final client = _client;
       try {
         final request = client != null ? client.get(url) : http.get(url);
-        response = await request.timeout(requestTimeout);
+        rawResponse = await request.timeout(requestTimeout);
       } on TimeoutException {
         if (source == null) _markUnreachable();
         throw JikanUnavailable(url, 'no answer after ${requestTimeout.inSeconds} s');
@@ -225,6 +225,7 @@ class JikanClient {
         if (source == null) _markUnreachable();
         throw JikanUnavailable(url, '$e');
       }
+      final response = _ensureUtf8Header(rawResponse);
       _unreachableUntil = null;
       if (response.statusCode == 429 && attempt < maxRetries) {
         final wait = retryDelay(response, attempt);
@@ -236,6 +237,25 @@ class JikanClient {
       if (response.statusCode == 200) _store(key, response);
       return response;
     }
+  }
+
+  /// Ensures `package:http`'s [http.Response.body] decodes UTF-8 JSON even when
+  /// upstream omits `; charset=utf-8` (as `jikan-edge` does on `application/json`).
+  static http.Response _ensureUtf8Header(http.Response response) {
+    final ct = response.headers['content-type'];
+    if (ct == null || ct.toLowerCase().contains('charset=')) return response;
+    if (!ct.toLowerCase().contains('json') && !ct.toLowerCase().startsWith('text/')) {
+      return response;
+    }
+    return http.Response.bytes(
+      response.bodyBytes,
+      response.statusCode,
+      headers: {...response.headers, 'content-type': '$ct; charset=utf-8'},
+      request: response.request,
+      isRedirect: response.isRedirect,
+      persistentConnection: response.persistentConnection,
+      reasonPhrase: response.reasonPhrase,
+    );
   }
 
   /// Waiting time before the retry number [attempt] (0 based): the

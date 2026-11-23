@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/MAL/contentdetailedscreen.dart';
-import 'package:mywatchlist/screens/MAL/detail/sections/section_states.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/utils/app_routes.dart';
 import 'package:mywatchlist/widgets/MAL/home/animegridcard.dart';
@@ -72,20 +71,16 @@ class ContentListWidget extends StatelessWidget {
     }
 
     final extent = _extent(effectiveWidth);
-    final count = items.length + (onViewAll == null ? 0 : 1);
     return Container(
       height: effectiveHeight,
       padding: padding ?? const EdgeInsets.all(8.0),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: count,
+        itemCount: items.length,
         itemExtent: extent,
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 4),
         itemBuilder: (context, index) {
-          if (index == items.length) {
-            return HorizontalViewAllCard(onPressed: onViewAll!);
-          }
           final item = items[index];
           final itemCategory = _categoryForItem(item);
           return Padding(

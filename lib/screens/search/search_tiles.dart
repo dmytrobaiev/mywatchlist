@@ -121,12 +121,20 @@ class MediaTile extends StatelessWidget {
   /// rank is shown when there is one.
   final int? index;
 
+  /// Optional widget overlaid on the cover thumbnail (e.g. a recommendation count badge).
+  final Widget? thumbOverlay;
+
+  /// Override whether the right-side quick-edit button is shown (defaults to `!compact`).
+  final bool? showEdit;
+
   const MediaTile({
     super.key,
     required this.item,
     required this.category,
     this.size = MediaTileSize.comfortable,
     this.index,
+    this.thumbOverlay,
+    this.showEdit,
   });
 
   @override
@@ -146,7 +154,9 @@ class MediaTile extends StatelessWidget {
       if (size == MediaTileSize.spacious && item.status != null) item.status!.replaceAll('_', ' '),
     ].join(' · ');
     final rank = index != null ? index! + 1 : item.rank;
-    final editable = !compact && (category == SearchCategory.anime || category == SearchCategory.manga);
+    final isMedia = category == SearchCategory.anime || category == SearchCategory.manga;
+    final editable = (showEdit ?? !compact) && isMedia;
+    final showStatusPill = !compact && isMedia;
 
     final meta = Row(
       children: [
@@ -190,6 +200,7 @@ class MediaTile extends StatelessWidget {
                     end: 4,
                     child: DubStatusBadge(animeId: item.id, radius: 5),
                   ),
+                if (thumbOverlay != null) thumbOverlay!,
               ],
             ),
             const SizedBox(width: 12),
@@ -218,7 +229,7 @@ class MediaTile extends StatelessWidget {
                       ),
                     ],
                     // The user's own status and score when it is in their list.
-                    if (editable) ...[
+                    if (showStatusPill) ...[
                       const SizedBox(height: 6),
                       ListStatusPill(id: item.id, category: category),
                     ],

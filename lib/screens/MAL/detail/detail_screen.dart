@@ -263,9 +263,39 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     setState(() => _sections = sections);
   }
 
+  bool _shouldShowAppBarTitle(ScrollPosition position) {
+    final countdown = contentPref(context, (c) => c.showCountdownOnDetail);
+    final expanded = DetailHeader.extentFor(
+      _data,
+      topInset: MediaQuery.paddingOf(context).top,
+      countdown: countdown,
+    );
+    final collapseOffset = (expanded - _pinnedExtent).clamp(0.0, double.infinity);
+    // Never show while the cover header itself is still partially visible.
+    if (position.pixels < collapseOffset) return false;
+
+    // Show starting from the Media section (or the first section after Synopsis).
+    TabType? trigger;
+    if (_tabTypes.contains(TabType.media)) {
+      trigger = TabType.media;
+    } else if (_tabTypes.length > 1) {
+      trigger = _tabTypes[1];
+    }
+    if (trigger == null) return true;
+
+    final box = _sectionKeys[trigger]?.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null && box.attached && box.hasSize) {
+      final mediaTop = box.localToGlobal(Offset.zero).dy;
+      return mediaTop <= _pinnedExtent + 24;
+    }
+    // If Media is off-screen above (already scrolled past), keep title visible;
+    // if still below the viewport inside Synopsis, keep it hidden.
+    return _tabController.index >= _tabTypes.indexOf(trigger);
+  }
+
   void _onScroll() {
     final position = _scroll.position;
-    final showTitle = position.pixels > DetailHeader.toolbarHeight + 62;
+    final showTitle = _shouldShowAppBarTitle(position);
     if (_showAppBarTitle.value != showTitle) _showAppBarTitle.value = showTitle;
 
     // Tab sync: at most once per frame, after a real move, never while a tab
@@ -339,7 +369,9 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
         slivers: [
           _appBar(context),
           _body(),
-          const SliverWrapper(SizedBox(height: 80)),
+          SliverWrapper(
+            SizedBox(height: 112 + MediaQuery.paddingOf(context).bottom),
+          ),
         ],
       ),
     );
@@ -385,6 +417,8 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     final countdown = contentPref(context, (c) => c.showCountdownOnDetail);
     return SliverAppBar(
       pinned: true,
+      backgroundColor: theme.colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
       expandedHeight: DetailHeader.extentFor(
         _data,
         topInset: MediaQuery.paddingOf(context).top,
@@ -401,7 +435,7 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
         child: Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.pin,
+        collapseMode: CollapseMode.parallax,
         background: ShimmerConditionally(
           showShimmer: _data.state == DetailLoadState.loading,
           baseColor: theme.scaffoldBackgroundColor,

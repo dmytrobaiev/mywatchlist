@@ -109,20 +109,13 @@ class _ShowAnimeForumState extends State<ShowAnimeForum>
       containerHeight = 310;
     }
 
-    final hasViewAll = widget.onViewAll != null;
     return SizedBox(
       height: containerHeight,
       child: PageView.builder(
         padEnds: false,
         controller: _pages,
-        itemCount: pageCount + (hasViewAll ? 1 : 0),
+        itemCount: pageCount,
         itemBuilder: (context, pageIndex) {
-          if (hasViewAll && pageIndex == pageCount) {
-            return HorizontalViewAllCard(
-              onPressed: widget.onViewAll!,
-              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            );
-          }
           final startIndex = pageIndex * itemsPerPage;
           final endIndex = (startIndex + itemsPerPage).clamp(0, topics.length);
           final pageTopics = topics.sublist(startIndex, endIndex);

@@ -1,5 +1,7 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:mywatchlist/widgets/common/background.dart';
 import 'package:mywatchlist/widgets/user/list/list_status_pill.dart';
 import 'package:intl/intl.dart';
 import 'package:mywatchlist/cache/bookmarks.dart';
@@ -163,7 +165,8 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
     if (_detailedData == null || !_showTabs) {
       return Scaffold(
         body: NestedScrollView(
-          headerSliverBuilder: (_, __) => _topSlivers(context),
+          headerSliverBuilder: (context, innerBoxIsScrolled) =>
+              _topSlivers(context, innerBoxIsScrolled),
           body: _buildNoContentFallback(Theme.of(context)),
         ),
       );
@@ -173,29 +176,27 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
       body: DefaultTabController(
         length: _tabs.length,
         child: NestedScrollView(
-          headerSliverBuilder: (_, __) => _topSlivers(context),
+          headerSliverBuilder: (context, innerBoxIsScrolled) =>
+              _topSlivers(context, innerBoxIsScrolled),
           body: _bodyWidget(),
         ),
       ),
     );
   }
 
-  // --- Collapsing app bar ---
+  // --- Collapsing app bar (matches FeaturedScreen / News detail header logic) ---
 
-  static const double _headerHeight = 240;
-
-  /// Pinned bar holding the back button, bookmark and menu. Title, author and pictures sit in its
-  /// expanded part and scroll away; the stack title then fades into the bar. Nothing floats over the list.
-  Widget _appBarSliver(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+  Widget _appBarSliver(BuildContext context, bool innerBoxIsScrolled) {
     final url = _webUrl;
     final canShare = !_isLoading && _error == null;
+    final hasTabs = _showTabs && _tabs.length > 1;
     return SliverAppBar(
       pinned: true,
-      expandedHeight: kToolbarHeight + _headerHeight + 16,
-      backgroundColor: scheme.surface,
-      surfaceTintColor: scheme.surfaceTint,
-      scrolledUnderElevation: 0,
+      floating: true,
+      expandedHeight: hasTabs ? 300 : 252,
+      title: innerBoxIsScrolled
+          ? Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis)
+          : null,
       actions: [
         if (canShare && _stackId != null)
           BookmarkButton(
@@ -220,185 +221,116 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
               subject: _title,
               title: S.current.Social_Stack_Title,
             ),
-            onOpenInBrowser: url == null ? null : () => openLink(context, url),
+            onOpenInBrowser: url == null ? null : () => openInBrowser(context, url),
           ),
       ],
-      flexibleSpace: LayoutBuilder(
-        builder: (context, _) {
-          final settings = context.dependOnInheritedWidgetOfExactType<FlexibleSpaceBarSettings>();
-          var collapsed = 0.0;
-          if (settings != null) {
-            final range = settings.maxExtent - settings.minExtent;
-            if (range > 0) collapsed = (1 - (settings.currentExtent - settings.minExtent) / range).clamp(0.0, 1.0);
-          }
-          // The title shows in the bar only once the expanded header has mostly scrolled away.
-          final titleAlpha = ((collapsed - 0.6) / 0.4).clamp(0.0, 1.0);
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              FlexibleSpaceBar(
-                collapseMode: CollapseMode.pin,
-                background: Padding(
-                  padding: EdgeInsets.only(
-                    top: kToolbarHeight + MediaQuery.paddingOf(context).top,
-                    bottom: 8,
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      SB.w20,
-                      Expanded(child: _titleWidget(context)),
-                      SB.w20,
-                      _picturesWidget(context),
-                      SB.w20,
-                    ],
-                  ),
-                ),
+      flexibleSpace: _headerWidget(context, hasTabs: hasTabs),
+      bottom: hasTabs
+          ? TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [for (final e in _tabs) Tab(text: e)],
+            )
+          : null,
+    );
+  }
+
+  Widget _headerWidget(BuildContext context, {required bool hasTabs}) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final topInset = MediaQuery.paddingOf(context).top;
+    final locale = Localizations.localeOf(context).toString();
+    final created = _formatted(_detailedData?['createdAt'], locale);
+    final updated = _formatted(_detailedData?['updatedAt'], locale);
+    final dateParts = [
+      if (created != null) S.current.StackPolish_Created(created),
+      if (updated != null) S.current.StackPolish_Updated(updated),
+    ];
+    final entriesCount = _entries.length;
+
+    return FlexibleSpaceBar(
+      background: Material(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Background(
+              context: context,
+              url: _coverUrl,
+              forceBg: true,
+            ),
+            Padding(
+              padding: EdgeInsets.only(
+                top: topInset + kToolbarHeight + 12,
+                left: 16,
+                right: 16,
+                bottom: hasTabs ? 60 : 16,
               ),
-              Positioned(
-                left: 72,
-                right: 120,
-                top: MediaQuery.paddingOf(context).top,
-                height: kToolbarHeight,
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    _title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: scheme.onSurface.withValues(alpha: titleAlpha),
-                        ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 72.0),
+                    child: AutoSizeText(
+                      _title,
+                      style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  InterestStackAuthor(username: widget.stack.username, align: TextAlign.start),
+                  if (dateParts.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      dateParts.join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (entriesCount > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '$entriesCount ${S.current.Social_Stack_Entries.toLowerCase()}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          );
-        },
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // --- Top slivers (header) ---
 
-  List<Widget> _topSlivers(BuildContext context) {
-    final theme = Theme.of(context);
+  List<Widget> _topSlivers(BuildContext context, bool innerBoxIsScrolled) {
     return [
-      _appBarSliver(context),
-      SB.lh10,
+      _appBarSliver(context, innerBoxIsScrolled),
       if (_detailedData == null)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.only(top: 40),
             child: loadingCenter(),
           ),
-        )
-      else ...[
-        _dateSliver(),
-        SB.lh10,
-        if (_description.isNotEmpty) _descriptionSliver(theme),
-        SB.lh10,
-        if (_showTabs && _tabs.length > 1) _tabBarSliver(),
-      ],
+        ),
     ];
   }
 
   String get _description => _detailedData?['description'] as String? ?? '';
 
-  // --- Title + username ---
-
-  Widget _titleWidget(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          _title,
-          textAlign: TextAlign.center,
-          maxLines: 5,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
-        SB.h15,
-        _usernameWidget(context),
-      ],
-    );
-  }
-
-  Widget _usernameWidget(BuildContext context) =>
-      InterestStackAuthor(username: widget.stack.username, align: TextAlign.center);
-
-  // --- Stacked images ---
-
-  Widget _picturesWidget(BuildContext context) {
-    final images = widget.stack.imageUrls?.reversed.toList() ?? [];
-    return SizedBox(
-      height: 240,
-      width: 170,
-      child: InterestStackPictures(images: images),
-    );
-  }
-
-  // --- Date widget ---
-
-  Widget _dateSliver() {
-    final locale = Localizations.localeOf(context).toString();
-    final created = _formatted(_detailedData?['createdAt'], locale);
-    final updated = _formatted(_detailedData?['updatedAt'], locale);
-    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        );
-    final parts = [
-      if (created != null) S.current.StackPolish_Created(created),
-      if (updated != null) S.current.StackPolish_Updated(updated),
-    ];
-    return SliverToBoxAdapter(
-      child: parts.isEmpty
-          ? const SizedBox.shrink()
-          : Padding(
-              padding: padding,
-              child: Text(parts.join(' · '), textAlign: TextAlign.center, style: style),
-            ),
-    );
-  }
-
   String? _formatted(Object? raw, String locale) {
     final text = raw is String ? raw.trim() : '';
     return text.isEmpty ? null : formatStackDate(text, locale);
-  }
-
-  // --- Description (expandable) ---
-
-  Widget _descriptionSliver(ThemeData theme) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: padding,
-        child: _ExpandableDescription(description: _description),
-      ),
-    );
-  }
-
-  // --- Tab bar ---
-
-  /// Pinned scrollable tabs beneath the collapsed app bar.
-  Widget _tabBarSliver() {
-    final scheme = Theme.of(context).colorScheme;
-    return SliverPersistentHeader(
-      pinned: true,
-      delegate: _PinnedTabBarDelegate(
-        backgroundColor: scheme.surface,
-        tabBar: TabBar(
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: [for (final e in _tabs) Tab(text: e)],
-        ),
-      ),
-    );
   }
 
   // --- Body (TabBarView) ---
@@ -421,11 +353,18 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
   }
 
   Widget _buildEntriesListView() {
+    final hasDesc = _description.isNotEmpty;
     return ListView.builder(
-      itemCount: _entries.length,
+      itemCount: _entries.length + (hasDesc ? 1 : 0),
       padding: const EdgeInsets.only(top: 10.0, bottom: 60.0),
       itemBuilder: (context, index) {
-        final item = _entries[index];
+        if (hasDesc && index == 0) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: _ExpandableDescription(description: _description),
+          );
+        }
+        final item = _entries[index - (hasDesc ? 1 : 0)];
         final category = item['category'] as String? ?? 'anime';
         return StackEntryTile(
           item: item,
@@ -733,6 +672,7 @@ class StackEntryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     final malId = item['malId'] as int?;
     final entryTitle = item['title'] as String? ?? '?';
     final imageUrl = item['imageUrl'] as String? ?? '';
@@ -741,7 +681,6 @@ class StackEntryTile extends StatelessWidget {
     final additionalInfo = item['additionalInfo'] as String? ?? '';
     final score = (item['score'] as num?)?.toDouble();
     final members = item['members'] as String? ?? '';
-    final synopsis = item['synopsis'] as String? ?? '';
     final genres = (item['genres'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     // Build the media info line: "TV · Finished · 25eps, 24min"
@@ -762,233 +701,143 @@ class StackEntryTile extends StatelessWidget {
       }
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5.0),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(6.0),
-          onTap: malId != null
-              ? () => gotoPage(
-                    context: context,
-                    newPage: ContentDetailedScreen(
-                      category: category,
-                      id: malId,
-                      node: Anime(
-                        id: malId,
-                        title: entryTitle,
-                        imageUrl: imageUrl,
-                        score: 0,
-                        members: 0,
+    return InkWell(
+      onTap: malId != null
+          ? () => gotoPage(
+                context: context,
+                newPage: ContentDetailedScreen(
+                  category: category,
+                  id: malId,
+                  node: Anime(
+                    id: malId,
+                    title: entryTitle,
+                    imageUrl: imageUrl,
+                    score: 0,
+                    members: 0,
+                  ),
+                ),
+              )
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Leading cover: DailyAL's 100 x 150
+            AvatarWidget(
+              height: stackCoverHeight,
+              width: stackCoverWidth,
+              url: imageUrl.isNotEmpty ? imageUrl : null,
+              userRoundBorderforLoading: false,
+              radius: BorderRadius.circular(6.0),
+            ),
+            const SizedBox(width: 12),
+            // Trailing info aligned with Search's MediaTile style
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (score != null && score > 0) ...[
+                        Icon(Icons.star_rounded,
+                            size: 16, color: theme.colorScheme.primary),
+                        const SizedBox(width: 2),
+                        ScoreReveal(
+                          child: Text(
+                            score.toStringAsFixed(2),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                      if (membersFormatted != null)
+                        Flexible(
+                          child: Padding(
+                            padding: const EdgeInsetsDirectional.only(start: 4),
+                            child: Text(
+                              '($membersFormatted)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    entryTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  if (mediaInfo.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      mediaInfo,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ],
+                  if (malId != null) ...[
+                    const SizedBox(height: 6),
+                    ListStatusPill(id: malId, category: category),
+                  ],
+                  if (genres.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 24,
+                      child: ListView.separated(
+                        itemCount: genres.length,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsetsDirectional.only(end: 8),
+                        separatorBuilder: (_, __) => const SizedBox(width: 5),
+                        itemBuilder: (context, i) {
+                          final genreName = genres[i]['name'] as String? ?? '';
+                          return Container(
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              color: theme.colorScheme.surfaceContainerHighest,
+                            ),
+                            child: Text(
+                              genreName,
+                              maxLines: 1,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontSize: 11,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  )
-              : null,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Leading cover: DailyAL's 100 x 150 (AvatarWidget would default to 35 wide)
-                Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: AvatarWidget(
-                    height: stackCoverHeight,
-                    width: stackCoverWidth,
-                    url: imageUrl.isNotEmpty ? imageUrl : null,
-                    userRoundBorderforLoading: false,
-                    radius: BorderRadius.circular(6.0),
-                  ),
-                ),
-                // Trailing info
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 15, right: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Score + members + synopsis button + edit button
-                        Row(
-                          children: [
-                            SizedBox(
-                              height: 15,
-                              child: Image.asset('assets/images/star.png'),
-                            ),
-                            SB.w5,
-                            ScoreReveal(
-                              child: title(
-                                score?.toStringAsFixed(1) ?? '-',
-                                fontSize: 15,
-                                opacity: 1,
-                              ),
-                            ),
-                            SB.w10,
-                            if (membersFormatted != null)
-                              title(
-                                '($membersFormatted)',
-                                textOverflow: TextOverflow.ellipsis,
-                              ),
-                            const Spacer(),
-                            SB.w10,
-                            // Synopsis info button
-                            if (synopsis.isNotEmpty)
-                              SizedBox(
-                                height: 35,
-                                width: 35,
-                                child: IconButton.filledTonal(
-                                  tooltip: S.current.Social_Stack_Synopsis,
-                                  onPressed: () => _showSynopsis(
-                                      context, theme, entryTitle, synopsis),
-                                  icon: const Icon(Icons.info_outline, size: 20),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: theme
-                                        .colorScheme.surfaceContainerHighest,
-                                    foregroundColor:
-                                        theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            SB.w10,
-                            // Edit button
-                            if (malId != null)
-                              SizedBox(
-                                height: 35,
-                                width: 35,
-                                child: IconButton.filledTonal(
-                                  tooltip: S.current.Social_Stack_Edit_Entry,
-                                  onPressed: () => showContentEditSheet(
-                                    context,
-                                    category,
-                                    Anime(
-                                      id: malId,
-                                      title: entryTitle,
-                                      imageUrl: imageUrl,
-                                      score: 0,
-                                      members: 0,
-                                    ),
-                                  ),
-                                  icon: const Icon(Icons.edit, size: 16),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: theme
-                                        .colorScheme.surfaceContainerHighest,
-                                    foregroundColor:
-                                        theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            SB.w10,
-                          ],
-                        ),
-                        SB.h15,
-                        // Title
-                        title(
-                          entryTitle,
-                          fontSize: 18,
-                          opacity: 1,
-                        ),
-                        // The user's own status and score when it is in their list.
-                        if (malId != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: ListStatusPill(id: malId, category: category),
-                          ),
-                        SB.h15,
-                        // Media info line: "TV · Finished · 25eps, 24min"
-                        if (mediaInfo.isNotEmpty)
-                          title(
-                            mediaInfo,
-                            fontSize: 12,
-                          ),
-                        SB.h20,
-                        // Genres row
-                        if (genres.isNotEmpty)
-                          SizedBox(
-                            height: 27,
-                            child: ListView.builder(
-                              itemCount: genres.length,
-                              scrollDirection: Axis.horizontal,
-                              itemBuilder: (context, i) {
-                                final genreName =
-                                    genres[i]['name'] as String? ?? '';
-                                return Padding(
-                                  padding: const EdgeInsets.only(
-                                      right: 5, bottom: 3),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(4),
-                                      color: theme.colorScheme
-                                          .surfaceContainerHighest,
-                                    ),
-                                    child: title(
-                                      genreName,
-                                      opacity: 1,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                  ],
+                ],
+              ),
             ),
-          ),
+            if (malId != null)
+              IconButton(
+                tooltip: S.current.Social_Stack_Edit_Entry,
+                icon: const Icon(Icons.edit_rounded),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => showContentEditSheet(
+                  context,
+                  category,
+                  Anime(
+                    id: malId,
+                    title: entryTitle,
+                    imageUrl: imageUrl,
+                    score: 0,
+                    members: 0,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
-
-  void _showSynopsis(
-      BuildContext context, ThemeData theme, String entryTitle, String synopsis) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(entryTitle),
-        content: SingleChildScrollView(
-          child: title(synopsis, opacity: 1),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(S.current.Social_Close),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PinnedTabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
-  final Color backgroundColor;
-
-  const _PinnedTabBarDelegate({
-    required this.tabBar,
-    required this.backgroundColor,
-  });
-
-  @override
-  double get minExtent => tabBar.preferredSize.height;
-
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Material(
-      color: backgroundColor,
-      elevation: overlapsContent ? 1 : 0,
-      child: tabBar,
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _PinnedTabBarDelegate oldDelegate) =>
-      oldDelegate.tabBar != tabBar || oldDelegate.backgroundColor != backgroundColor;
 }

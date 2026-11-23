@@ -113,6 +113,7 @@ class ReviewFilterBar extends StatelessWidget {
     final foreground = selected != null ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurfaceVariant;
     return PopupMenuButton<int>(
       tooltip: S.current.Social_Reviews_Filter_Score,
+      constraints: const BoxConstraints(minWidth: 84, maxWidth: 112),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onSelected: (value) => onChanged(filters.copyWith(score: () => value)),
       itemBuilder: (_) => [

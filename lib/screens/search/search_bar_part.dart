@@ -26,7 +26,7 @@ extension _SearchBar on _GeneralSearchScreenState {
                 ],
               ),
             ),
-            if (_filters.isNotEmpty)
+            if (_filters.isNotEmpty && !_specialQuery)
               _ActiveFilters(
                 filters: _filters,
                 category: _category,
@@ -115,7 +115,7 @@ extension _SearchBar on _GeneralSearchScreenState {
   }
 
   Widget _buildFilterButton(ThemeData theme) {
-    final count = _filters.activeCount;
+    final count = _specialQuery ? 0 : _filters.activeCount;
     return IconButton(
       tooltip: S.current.Srch_Tab_Filter,
       isSelected: _showPanel,
@@ -126,7 +126,7 @@ extension _SearchBar on _GeneralSearchScreenState {
       icon: Badge(
         isLabelVisible: count > 0,
         label: Text('$count'),
-        child: Icon(_filters.isNotEmpty ? Icons.filter_alt_rounded : Icons.filter_alt_outlined),
+        child: Icon(count > 0 ? Icons.filter_alt_rounded : Icons.filter_alt_outlined),
       ),
     );
   }

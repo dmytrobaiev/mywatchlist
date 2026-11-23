@@ -91,9 +91,6 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
   /// The entries shown last (after the compare filter), for "select all".
   List<ListEntryView> _shown = const [];
 
-  /// Whether the signed-in user can write a MAL list (bulk add needs it).
-  bool get _canWrite => const MalListEntryService().canEdit && UserMalV2.instance.username != null;
-
   /// The signed-in user's own statuses (the whole list is kept there).
   ListStatusCache get _mine => widget.myList ?? ListStatusCache.instance;
 
@@ -323,14 +320,6 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
                   onSelectionChanged: (v) => _select(category: v.first),
                 ),
                 const Spacer(),
-                if (_canWrite)
-                  IconButton(
-                    tooltip: s.Bulk_Select,
-                    isSelected: _selection.active,
-                    icon: const Icon(Icons.checklist_rounded),
-                    selectedIcon: Icon(Icons.checklist_rounded, color: Theme.of(context).colorScheme.primary),
-                    onPressed: () => _selection.active ? _selection.stop() : _selection.start(),
-                  ),
                 if (comparing)
                   _CompareButton(
                     value: _compare,

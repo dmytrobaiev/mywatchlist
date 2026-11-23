@@ -384,7 +384,12 @@ class _UserListViewState extends State<UserListView> with SingleTickerProviderSt
         for (final c in widget.categories)
           ButtonSegment(
             value: c,
-            label: Text(c == 'anime' ? S.current.UserList_Anime : S.current.UserList_Manga),
+            label: Text(
+              c == 'anime' ? S.current.UserList_Anime : S.current.UserList_Manga,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+            ),
           ),
       ],
       selected: {_category},
@@ -392,6 +397,7 @@ class _UserListViewState extends State<UserListView> with SingleTickerProviderSt
       style: const ButtonStyle(
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
       ),
       onSelectionChanged: (s) => _changeCategory(s.first),
     );

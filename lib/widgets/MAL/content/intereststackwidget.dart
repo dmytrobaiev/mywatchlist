@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mywatchlist/constants/constants.dart' show DisplayType, gotoPage;
 import 'package:mywatchlist/generated/l10n.dart';
-import 'package:mywatchlist/screens/MAL/detail/sections/section_states.dart';
 import 'package:mywatchlist/screens/MAL/interest_stack_detail_screen.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/anime_detailed_html.dart';
 import 'package:mywatchlist/widgets/MAL/review/user_link.dart';
@@ -35,7 +34,6 @@ class InterestStackContentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasViewAll = isHoriz && onViewAll != null;
     return SizedBox(
       height: isHoriz ? 240 : null,
       child: ListView.builder(
@@ -46,16 +44,8 @@ class InterestStackContentList extends StatelessWidget {
             (isHoriz
                 ? EdgeInsets.symmetric(horizontal: horizPadding + 15.0)
                 : const EdgeInsets.symmetric(vertical: 20, horizontal: 5)),
-        itemCount: interestStacks.length + (hasViewAll ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (hasViewAll && index == interestStacks.length) {
-            return HorizontalViewAllCard(
-              onPressed: onViewAll!,
-              width: 140,
-            );
-          }
-          return _StackCard(stack: interestStacks[index], isHoriz: isHoriz);
-        },
+        itemCount: interestStacks.length,
+        itemBuilder: (context, index) => _StackCard(stack: interestStacks[index], isHoriz: isHoriz),
       ),
     );
   }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/MAL/character_screen.dart';
-import 'package:mywatchlist/screens/MAL/detail/sections/section_states.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/anime_detailed_html.dart';
 import 'package:mywatchlist/widgets/common/app_image.dart';
 
@@ -401,19 +400,12 @@ class _CharacterPagesState extends State<_CharacterPages> {
     final noOfPages = (length / perPage).ceil();
     final lastPage = noOfPages - 1;
     final rowsShown = noOfPages == 1 ? length : perPage;
-    final hasViewAll = widget.onViewAll != null;
     return SizedBox(
       height: rowsShown * widget.itemHeight,
       child: PageView.builder(
-        itemCount: noOfPages + (hasViewAll ? 1 : 0),
+        itemCount: noOfPages,
         controller: _controller,
         itemBuilder: (context, pageIndex) {
-          if (hasViewAll && pageIndex == noOfPages) {
-            return HorizontalViewAllCard(
-              onPressed: widget.onViewAll!,
-              margin: const EdgeInsetsDirectional.only(end: 12, top: 4, bottom: 4),
-            );
-          }
           final rows = pageIndex == lastPage ? (length % perPage == 0 ? perPage : length % perPage) : perPage;
           return Padding(
             padding: const EdgeInsetsDirectional.only(end: 12),

@@ -119,6 +119,23 @@ Future<bool> launchWebView(String url, {BuildContext? context, bool external = f
   return opened;
 }
 
+/// Opens [url] directly in the external system browser, bypassing
+/// [WebLauncher.internalLinkHandler] (in-app deep link routing) and Custom Tabs.
+///
+/// Use this for explicit "Open in Browser" menu actions so tapping it never
+/// reopens the same page inside the app.
+Future<bool> openInBrowser(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null) {
+    showToast('${S.current.Couldn_Launch} $url');
+    return false;
+  }
+  final target = uri.hasScheme
+      ? uri
+      : Uri.https('myanimelist.net', uri.path, uri.hasQuery ? uri.queryParameters : null);
+  return launchWebView(target.toString(), context: context, external: true);
+}
+
 /// What a tap on a link does. A MyAnimeList link handled by
 /// [WebLauncher.internalLinkHandler] opens its in-app screen directly; any
 /// other link asks first ([showOpenLinkDialog], skipped when [confirm] is

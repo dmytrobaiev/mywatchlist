@@ -98,12 +98,14 @@ class SearchFilters {
   List<int> get genresIn => (_values[FilterKey.genresIn] as List<int>?) ?? const [];
   List<int> get genresOut => (_values[FilterKey.genresOut] as List<int>?) ?? const [];
 
-  /// How many filters are on; the genre include/exclude pair and season/year pair each count as one.
+  /// How many filters are on; paired keys (`genresIn`/`genresOut`, `season`/`year`,
+  /// `orderBy`/`sort`) each count as one.
   int get activeCount {
     var count = 0;
     for (final key in _values.keys) {
       if (key == FilterKey.genresOut && _values.containsKey(FilterKey.genresIn)) continue;
       if (key == FilterKey.year && _values.containsKey(FilterKey.season)) continue;
+      if (key == FilterKey.sort && _values.containsKey(FilterKey.orderBy)) continue;
       if (key == FilterKey.producerLabel || key == FilterKey.magazineLabel) continue;
       count++;
     }

@@ -27,32 +27,29 @@ class DetailSectionFrame extends StatelessWidget {
         if (!isFirst && !section.skipTitle)
           Padding(
             padding: const EdgeInsets.only(
-                left: _pad + 10, top: 25, right: _pad + 10),
+                left: _pad + 10, top: 25, right: _pad + 5),
             child: Row(
               children: [
-                text(section.title, fontSize: 22),
-                if (onViewAll != null || trailing != null) ...[
-                  const Spacer(),
-                  if (trailing != null && onViewAll != null) ...[
-                    trailing,
-                    const SizedBox(width: 15),
-                  ],
-                  // Without an arrow, the trailing buttons take its place at the end of the row.
-                  if (trailing != null && onViewAll == null)
-                    Padding(
-                        padding: const EdgeInsets.only(right: _pad),
-                        child: trailing),
-                  if (onViewAll != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: _pad),
-                      child: PlainButton(
-                        padding: const EdgeInsets.symmetric(horizontal: _pad),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        onPressed: () => onViewAll(context),
-                        child: const Icon(Icons.arrow_forward),
-                      ),
-                    ),
+                Expanded(
+                  child: text(
+                    section.title,
+                    fontSize: 22,
+                    textOverflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 4),
+                  trailing,
+                ],
+                if (onViewAll != null) ...[
+                  const SizedBox(width: 4),
+                  PlainButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    onPressed: () => onViewAll(context),
+                    child: const Icon(Icons.arrow_forward),
+                  ),
                 ],
               ],
             ),

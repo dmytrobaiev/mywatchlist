@@ -257,31 +257,76 @@ final _borderRadiusTypes = [
   LinkType.otherLists,
 ];
 
+String _platformInitials(String name) {
+  final words = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return '?';
+  if (words.length == 1) {
+    final w = words.first;
+    return w.length >= 2 ? w.substring(0, 2).toUpperCase() : w.toUpperCase();
+  }
+  return '${words[0][0]}${words[1][0]}'.toUpperCase();
+}
+
+Widget _platformMonogram(BuildContext context, AnimeLink link, double? size) {
+  final scheme = Theme.of(context).colorScheme;
+  final dim = size ?? 35;
+  final isCircle = _borderRadiusTypes.contains(link.linkType);
+  return Container(
+    width: dim,
+    height: dim,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: scheme.surfaceContainerHighest,
+      shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+      borderRadius: isCircle ? null : BorderRadius.circular(6),
+    ),
+    child: Text(
+      _platformInitials(link.name),
+      style: TextStyle(
+        fontSize: (dim * 0.34).clamp(10.0, 14.0),
+        fontWeight: FontWeight.w600,
+        color: scheme.onSurfaceVariant,
+      ),
+    ),
+  );
+}
+
 Widget _buildLinkImage({
   required BuildContext context,
   required AnimeLink link,
   double? size,
 }) {
+  final isCircle = _borderRadiusTypes.contains(link.linkType);
+  final imgUrl = link.imageUrl;
+  final Widget icon;
+  if (imgUrl != null && imgUrl.isNotEmpty) {
+    final raw = imgUrl.startsWith('assets/')
+        ? Image.asset(
+            imgUrl,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (ctx, _, __) => _platformMonogram(ctx, link, size),
+          )
+        : Image.network(
+            imgUrl,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (ctx, _, __) => _platformMonogram(ctx, link, size),
+          );
+    icon = isCircle ? ClipOval(child: raw) : raw;
+  } else {
+    icon = _platformMonogram(context, link, size);
+  }
   return SizedBox(
     height: size,
     width: size,
-    child: link.imageUrl != null && link.imageUrl!.isNotEmpty
-        ? ToolTipButton(
-            message: link.name,
-            onTap: () => _onLinkTap(context, link),
-            child: AvatarAspect(
-              url: link.imageUrl,
-              useUserImageOnError: false,
-              radius: _borderRadiusTypes.contains(link.linkType)
-                  ? null
-                  : BorderRadius.zero,
-            ),
-          )
-        : ToolTipButton(
-            message: link.name,
-            onTap: () => _onLinkTap(context, link),
-            child: const Icon(Icons.link),
-          ),
+    child: ToolTipButton(
+      message: link.name,
+      onTap: () => _onLinkTap(context, link),
+      child: icon,
+    ),
   );
 }
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mywatchlist/constants/constants.dart' show TabType, gotoPage;
+import 'package:mywatchlist/constants/constants.dart' show TabType, gotoPage, text;
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/MAL/detail/detail_data.dart';
 import 'package:mywatchlist/screens/MAL/detail/detail_sections.dart';
@@ -82,20 +82,19 @@ class _TitleClubsRowState extends State<TitleClubsRow> {
   @override
   Widget build(BuildContext context) {
     if (_clubs.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
+    const sidePad = detailHorizPadding + 10;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-          child: Text(S.current.Clubs,
-              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+          padding: const EdgeInsets.fromLTRB(sidePad, 22, sidePad, 16),
+          child: text(S.current.Clubs, fontSize: 22),
         ),
         SizedBox(
           height: 64,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: sidePad),
             itemCount: _clubs.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (context, i) => _ClubCard(club: _clubs[i]),

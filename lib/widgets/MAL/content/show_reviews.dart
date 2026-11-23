@@ -152,14 +152,8 @@ class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepA
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 13),
       itemExtent: _cardWidth,
-      itemCount: preview.length + (hasViewAll ? 1 : (showLoader ? 1 : 0)),
+      itemCount: preview.length + (showLoader ? 1 : 0),
       itemBuilder: (context, index) {
-        if (hasViewAll && index == preview.length) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 17),
-            child: HorizontalViewAllCard(onPressed: widget.onViewAll!),
-          );
-        }
         if (index == preview.length) return const ReviewLoadingCard();
         return AutoScrollTag(
           key: ValueKey(index),

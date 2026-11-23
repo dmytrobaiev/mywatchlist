@@ -366,11 +366,23 @@ class _CharacterScreenState extends State<CharacterScreen> {
       });
     }
     try {
-      final result = await JikanFallbacks.race<_Profile>(
-        jikan: _fromJikan,
-        fallback: _fromMal,
-      );
-      final profile = result.value;
+      // For character pages, jikan-edge strips `<div class="spoiler">` wrappers
+      // and truncates trailing spoilers at `<div`. Prefer MAL's own page so
+      // collapsible `[Spoiler]` blocks remain intact, falling back to Jikan.
+      final _Profile profile;
+      if (_isCharacter) {
+        _Profile? malProfile;
+        try {
+          malProfile = await _fromMal();
+        } catch (_) {}
+        profile = malProfile ?? await _fromJikan();
+      } else {
+        final result = await JikanFallbacks.race<_Profile>(
+          jikan: _fromJikan,
+          fallback: _fromMal,
+        );
+        profile = result.value;
+      }
       _favoritesCache.addAll(profile.roleFavorites);
       if (!mounted) return;
       setState(() {
@@ -575,7 +587,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
               if (profile != null)
                 AppBarMenu(
                   onShare: () => _share(profile),
-                  onOpenInBrowser: () => openLink(context, _url),
+                  onOpenInBrowser: () => openInBrowser(context, _url),
                 ),
             ],
           ),
@@ -1245,12 +1257,77 @@ class _SpoilerBlockState extends State<_SpoilerBlock> {
 }
 
 final RegExp _aboutLinkRe = RegExp(
-  r'(https?://[^\s)\]]+)|((?:Twitter|X|Instagram|TikTok)\s*:\s*)(@([A-Za-z0-9_.]+))',
+  r'(https?://[^\s)\]]+)|((?:Twitter|X|Instagram|TikTok|YouTube)\s*:\s*)(@[A-Za-z0-9_.-]+(?:[ \t]*,[ \t\r\n]*@[A-Za-z0-9_.-]+)*)',
   caseSensitive: false,
 );
+final RegExp _singleAtHandleRe = RegExp(r'@([A-Za-z0-9_.-]+)');
+final RegExp _danglingHtmlTagRe = RegExp(r'\s*<[a-zA-Z][^>]*$');
 
-/// Selectable text that turns URLs and `Twitter/X/Instagram/TikTok: @handle` mentions
-/// into tappable links, properly disposing its [TapGestureRecognizer]s.
+/// Strips any trailing incomplete HTML tag (e.g. dangling `<div` from jikan-edge).
+String sanitizeAboutText(String raw) => raw.replaceFirst(_danglingHtmlTagRe, '').trimRight();
+
+/// Builds the canonical profile URL for a social handle under [platformLabel].
+String socialHandleUrl(String platformLabel, String handle) {
+  final lower = platformLabel.toLowerCase();
+  if (lower.startsWith('instagram')) return 'https://www.instagram.com/$handle';
+  if (lower.startsWith('tiktok')) return 'https://www.tiktok.com/@$handle';
+  if (lower.startsWith('youtube')) return 'https://www.youtube.com/@$handle';
+  return 'https://x.com/$handle';
+}
+
+/// Tokenizes [text] into plain segments and clickable links (URLs plus single or
+/// comma-separated `Twitter/X/Instagram/TikTok/YouTube: @handle` mentions).
+List<({String text, String? url})> parseAboutLinks(String text) {
+  final cleaned = sanitizeAboutText(text);
+  final out = <({String text, String? url})>[];
+  var cursor = 0;
+  for (final match in _aboutLinkRe.allMatches(cleaned)) {
+    if (match.start > cursor) {
+      out.add((text: cleaned.substring(cursor, match.start), url: null));
+    }
+    final fullUrl = match.group(1);
+    if (fullUrl != null) {
+      out.add((text: fullUrl, url: fullUrl));
+    } else {
+      final prefix = match.group(2) ?? '';
+      final handlesPart = match.group(3) ?? '';
+      if (prefix.isNotEmpty) out.add((text: prefix, url: null));
+      var subCursor = 0;
+      for (final hMatch in _singleAtHandleRe.allMatches(handlesPart)) {
+        if (hMatch.start > subCursor) {
+          out.add((text: handlesPart.substring(subCursor, hMatch.start), url: null));
+        }
+        var rawToken = hMatch.group(0)!;
+        var handle = hMatch.group(1)!;
+        var trailing = '';
+        while (handle.endsWith('.')) {
+          handle = handle.substring(0, handle.length - 1);
+          rawToken = rawToken.substring(0, rawToken.length - 1);
+          trailing = '.$trailing';
+        }
+        if (handle.isNotEmpty) {
+          out.add((text: rawToken, url: socialHandleUrl(prefix, handle)));
+        } else {
+          out.add((text: rawToken, url: null));
+        }
+        if (trailing.isNotEmpty) out.add((text: trailing, url: null));
+        subCursor = hMatch.end;
+      }
+      if (subCursor < handlesPart.length) {
+        out.add((text: handlesPart.substring(subCursor), url: null));
+      }
+    }
+    cursor = match.end;
+  }
+  if (cursor < cleaned.length) {
+    out.add((text: cleaned.substring(cursor), url: null));
+  }
+  return out;
+}
+
+/// Selectable text that turns URLs and `Twitter/X/Instagram/TikTok/YouTube: @handle`
+/// mentions (including comma-separated lists) into tappable links, properly disposing
+/// its [TapGestureRecognizer]s.
 class _LinkifiedAboutText extends StatefulWidget {
   final String text;
   final TextStyle? style;
@@ -1277,13 +1354,6 @@ class _LinkifiedAboutTextState extends State<_LinkifiedAboutText> {
     _recognizers.clear();
   }
 
-  String _handleUrl(String prefix, String handle) {
-    final lower = prefix.toLowerCase();
-    if (lower.startsWith('instagram')) return 'https://www.instagram.com/$handle';
-    if (lower.startsWith('tiktok')) return 'https://www.tiktok.com/@$handle';
-    return 'https://x.com/$handle';
-  }
-
   @override
   Widget build(BuildContext context) {
     _clearRecognizers();
@@ -1295,32 +1365,16 @@ class _LinkifiedAboutTextState extends State<_LinkifiedAboutText> {
     );
 
     final spans = <InlineSpan>[];
-    var cursor = 0;
-    for (final match in _aboutLinkRe.allMatches(widget.text)) {
-      if (match.start > cursor) {
-        spans.add(TextSpan(text: widget.text.substring(cursor, match.start)));
-      }
-      final fullUrl = match.group(1);
-      if (fullUrl != null) {
+    for (final token in parseAboutLinks(widget.text)) {
+      if (token.url != null) {
+        final target = token.url!;
         final recognizer = TapGestureRecognizer()
-          ..onTap = () => openLink(context, fullUrl);
+          ..onTap = () => openLink(context, target);
         _recognizers.add(recognizer);
-        spans.add(TextSpan(text: fullUrl, style: linkStyle, recognizer: recognizer));
+        spans.add(TextSpan(text: token.text, style: linkStyle, recognizer: recognizer));
       } else {
-        final prefix = match.group(2) ?? '';
-        final atHandle = match.group(3) ?? '';
-        final handle = match.group(4) ?? '';
-        if (prefix.isNotEmpty) spans.add(TextSpan(text: prefix));
-        final url = _handleUrl(prefix, handle);
-        final recognizer = TapGestureRecognizer()
-          ..onTap = () => openLink(context, url);
-        _recognizers.add(recognizer);
-        spans.add(TextSpan(text: atHandle, style: linkStyle, recognizer: recognizer));
+        spans.add(TextSpan(text: token.text));
       }
-      cursor = match.end;
-    }
-    if (cursor < widget.text.length) {
-      spans.add(TextSpan(text: widget.text.substring(cursor)));
     }
 
     return SelectableText.rich(

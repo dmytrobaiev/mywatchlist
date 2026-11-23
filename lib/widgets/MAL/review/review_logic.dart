@@ -56,8 +56,26 @@ List<String> reviewTags(Iterable<AnimeReview> reviews) {
   return tags.toList();
 }
 
+/// Parses a review date from either ISO-8601 (`2024-03-24T...`) or MAL/jikan-edge
+/// display format (`Mar 24, 2024`).
+DateTime? parseReviewDate(String? raw) {
+  if (raw == null) return null;
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  final iso = DateTime.tryParse(trimmed);
+  if (iso != null) return iso;
+  try {
+    return DateFormat('MMM d, yyyy', 'en_US').parseLoose(trimmed);
+  } catch (_) {
+    try {
+      return DateFormat('MMMM d, yyyy', 'en_US').parseLoose(trimmed);
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 /// Reviews matching [score] and any of [tags] (both optional), sorted by [sort].
-/// [reviews] is expected in the API order (newest first).
 List<AnimeReview> filterReviews(
   List<AnimeReview> reviews, {
   ReviewSort sort = ReviewSort.newest,
@@ -65,7 +83,7 @@ List<AnimeReview> filterReviews(
   Set<String> tags = const {},
 }) {
   final normalizedFilterTags = tags.map(normalizeReviewTag).toSet();
-  var result = reviews.where((review) {
+  final filtered = reviews.where((review) {
     if (score != null && review.score != score) return false;
     if (normalizedFilterTags.isNotEmpty) {
       final own = review.tags;
@@ -75,25 +93,74 @@ List<AnimeReview> filterReviews(
     }
     return true;
   }).toList();
+
+  final indexed = [for (var i = 0; i < filtered.length; i++) (i, filtered[i])];
   switch (sort) {
     case ReviewSort.helpful:
-      // Most reacted first; equal counts keep the API order.
-      final indexed = [for (var i = 0; i < result.length; i++) (i, result[i])];
       indexed.sort((a, b) {
         final byReactions = (b.$2.reactions?.overall ?? 0).compareTo(a.$2.reactions?.overall ?? 0);
         return byReactions != 0 ? byReactions : a.$1.compareTo(b.$1);
       });
-      result = [for (final entry in indexed) entry.$2];
     case ReviewSort.newest:
-      break;
+      indexed.sort((a, b) {
+        final da = parseReviewDate(a.$2.date);
+        final db = parseReviewDate(b.$2.date);
+        if (da != null && db != null) {
+          final cmp = db.compareTo(da);
+          if (cmp != 0) return cmp;
+        } else if (da != null) {
+          return -1;
+        } else if (db != null) {
+          return 1;
+        }
+        final idCmp = (b.$2.malId ?? 0).compareTo(a.$2.malId ?? 0);
+        return idCmp != 0 ? idCmp : a.$1.compareTo(b.$1);
+      });
     case ReviewSort.oldest:
-      result = result.reversed.toList();
+      indexed.sort((a, b) {
+        final da = parseReviewDate(a.$2.date);
+        final db = parseReviewDate(b.$2.date);
+        if (da != null && db != null) {
+          final cmp = da.compareTo(db);
+          if (cmp != 0) return cmp;
+        } else if (da != null) {
+          return -1;
+        } else if (db != null) {
+          return 1;
+        }
+        final idCmp = (a.$2.malId ?? 0).compareTo(b.$2.malId ?? 0);
+        return idCmp != 0 ? idCmp : a.$1.compareTo(b.$1);
+      });
     case ReviewSort.highest:
-      result.sort((a, b) => (b.score ?? 0).compareTo(a.score ?? 0));
+      indexed.sort((a, b) {
+        final sa = a.$2.score;
+        final sb = b.$2.score;
+        if (sa != null && sb != null) {
+          final cmp = sb.compareTo(sa);
+          if (cmp != 0) return cmp;
+        } else if (sa != null) {
+          return -1;
+        } else if (sb != null) {
+          return 1;
+        }
+        return a.$1.compareTo(b.$1);
+      });
     case ReviewSort.lowest:
-      result.sort((a, b) => (a.score ?? 0).compareTo(b.score ?? 0));
+      indexed.sort((a, b) {
+        final sa = a.$2.score;
+        final sb = b.$2.score;
+        if (sa != null && sb != null) {
+          final cmp = sa.compareTo(sb);
+          if (cmp != 0) return cmp;
+        } else if (sa != null) {
+          return -1;
+        } else if (sb != null) {
+          return 1;
+        }
+        return a.$1.compareTo(b.$1);
+      });
   }
-  return result;
+  return [for (final entry in indexed) entry.$2];
 }
 
 /// Texts sent to the summary service: non-empty, at most [maxReviews] reviews of at most
@@ -113,9 +180,9 @@ List<String> reviewTextsForSummary(
   return texts;
 }
 
-/// "Jan 5, 2024" in [locale]; the ISO day when the date cannot be formatted.
+/// "Jan 5, 2024" in [locale]; the raw string when the date cannot be formatted.
 String formatReviewDate(String? iso, String locale) {
-  final date = iso == null ? null : DateTime.tryParse(iso);
+  final date = parseReviewDate(iso);
   if (date == null) return '';
   try {
     return DateFormat.yMMMd(locale).format(date);

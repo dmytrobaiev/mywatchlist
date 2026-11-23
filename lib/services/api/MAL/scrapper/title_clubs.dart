@@ -57,9 +57,26 @@ class TitleClubs {
     return clubs;
   }
 
+  /// Finds the individual club's container (`div.borderClass` on live MAL
+  /// `/<category>/<id>/_/clubs` pages, or a `tr` that belongs to this single club).
+  /// Never walks up to MAL's outer 2-column page layout `<tr>` (which contains
+  /// multiple clubs and the title's cover image).
   static Element? _row(Element link) {
     for (Element? e = link.parent; e != null; e = e.parent) {
-      if (e.localName == 'tr') return e;
+      if (e.localName == 'div' && e.classes.contains('borderClass')) {
+        if (e.querySelectorAll('a[href*="clubs.php?cid="]').length == 1) {
+          return e;
+        }
+      }
+      if (e.localName == 'tr') {
+        final links = e.querySelectorAll('a[href*="clubs.php?cid="]');
+        final uniqueIds = {
+          for (final l in links)
+            RegExp(r'cid=(\d+)').firstMatch(l.attributes['href'] ?? '')?.group(1),
+        }..remove(null);
+        if (uniqueIds.length == 1) return e;
+        return null;
+      }
     }
     return null;
   }

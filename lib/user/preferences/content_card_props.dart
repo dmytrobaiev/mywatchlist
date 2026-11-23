@@ -27,6 +27,9 @@ enum CustomizableFieldType {
 
   /// MWL: time still to watch ("5 h 20 min left"), anime still to watch only.
   time_left,
+
+  /// MWL: episode/chapter watch progress bar.
+  progress_bar,
 }
 
 /// Localized name and description of each field, for the card editor.
@@ -50,6 +53,7 @@ extension CustomizableFieldTypeText on CustomizableFieldType {
         CustomizableFieldType.next_episode_full_counter =>
           S.current.Card_Field_Next_Episode_Full,
         CustomizableFieldType.time_left => S.current.Ltf_Field_Time_Left,
+        CustomizableFieldType.progress_bar => S.current.Card_Field_Progress_Bar,
       };
 
   String get description => switch (this) {
@@ -72,6 +76,7 @@ extension CustomizableFieldTypeText on CustomizableFieldType {
         CustomizableFieldType.next_episode_full_counter =>
           S.current.Card_Field_Next_Episode_Full_Desc,
         CustomizableFieldType.time_left => S.current.Ltf_Field_Time_Left_Desc,
+        CustomizableFieldType.progress_bar => S.current.Card_Field_Progress_Bar_Desc,
       };
 }
 
@@ -255,9 +260,10 @@ ContentCardProps builtInCardLayout(BuiltInCardStyle style) {
         _at(CustomizableFieldType.un_seen_episodes, bottom: 10, left: 56),
         _at(CustomizableFieldType.mean_score, top: 6, left: 100),
         _at(CustomizableFieldType.title, top: 26, left: 100, right: 8),
-        _at(CustomizableFieldType.media_type, top: 68, left: 100),
-        _at(CustomizableFieldType.list_score, bottom: 14, left: 100),
-        _at(CustomizableFieldType.edit_and_watched_button, bottom: 6, right: 8),
+        _at(CustomizableFieldType.media_type, top: 52, left: 100, right: 8),
+        _at(CustomizableFieldType.list_score, bottom: 18, left: 100),
+        _at(CustomizableFieldType.edit_and_watched_button, bottom: 10, right: 8),
+        _at(CustomizableFieldType.progress_bar, bottom: 4, left: 100, right: 8),
       ];
     case BuiltInCardStyle.spacious:
       // As Comfortable, plus members, genres and the next episode line.
@@ -267,13 +273,14 @@ ContentCardProps builtInCardLayout(BuiltInCardStyle style) {
         _at(CustomizableFieldType.image, top: 4, left: 4),
         _at(CustomizableFieldType.un_seen_episodes, bottom: 10, left: 84),
         _at(CustomizableFieldType.mean_score, top: 6, left: 128),
-        _at(CustomizableFieldType.num_list_users, top: 8, left: 190),
+        _at(CustomizableFieldType.num_list_users, top: 7, left: 180),
         _at(CustomizableFieldType.title, top: 26, left: 128, right: 8),
-        _at(CustomizableFieldType.media_type, top: 68, left: 128),
-        _at(CustomizableFieldType.genre, top: 86, left: 128, right: 8),
-        _at(CustomizableFieldType.next_episode_full_counter, top: 104, left: 128, right: 8),
-        _at(CustomizableFieldType.list_score, bottom: 14, left: 128),
-        _at(CustomizableFieldType.edit_and_watched_button, bottom: 6, right: 8),
+        _at(CustomizableFieldType.media_type, top: 50, left: 128, right: 8),
+        _at(CustomizableFieldType.genre, top: 69, left: 128, right: 8),
+        _at(CustomizableFieldType.next_episode_full_counter, top: 88, left: 128, right: 8),
+        _at(CustomizableFieldType.list_score, bottom: 18, left: 128),
+        _at(CustomizableFieldType.edit_and_watched_button, bottom: 10, right: 8),
+        _at(CustomizableFieldType.progress_bar, bottom: 4, left: 128, right: 8),
       ];
   }
   final types = {for (final f in shown) f.type};
@@ -350,5 +357,9 @@ const List<CustomizableField> defaultCustomizableFields = [
   CustomizableField(
       type: CustomizableFieldType.time_left,
       position: FieldPosition(top: 95, left: 100),
+      hidden: true),
+  CustomizableField(
+      type: CustomizableFieldType.progress_bar,
+      position: FieldPosition(bottom: 4, left: 100, right: 8),
       hidden: true),
 ];
