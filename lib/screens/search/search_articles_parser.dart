@@ -13,8 +13,11 @@ AnimeNewsOrFeaturedResult parseLatestArticles(String body) {
   final items = <AnimeNewsOrFeaturedItem>[];
   final seen = <int>{};
 
-  for (final unit in list?.querySelectorAll('.box-unit3') ?? const <Element>[]) {
-    final url = unit.querySelector('a.box-unit3-btn')?.attributes['href']?.trim() ?? '';
+  final boxUnits = list?.querySelectorAll('.box-unit3') ?? const <Element>[];
+  for (final unit in boxUnits.isNotEmpty ? boxUnits : document.querySelectorAll('.box-unit3')) {
+    final url = unit.querySelector('a.box-unit3-btn')?.attributes['href']?.trim() ??
+        unit.querySelector('a[href*="/news/"], a[href*="/featured/"]')?.attributes['href']?.trim() ??
+        '';
     final id = int.tryParse(RegExp(r'/(?:news|featured)/(\d+)').firstMatch(url)?.group(1) ?? '');
     final title = unit.querySelector('.title')?.text.trim() ?? '';
     if (id == null || title.isEmpty || !seen.add(id)) continue;
@@ -30,7 +33,8 @@ AnimeNewsOrFeaturedResult parseLatestArticles(String body) {
   }
 
   if (items.isEmpty) {
-    final units = list?.querySelectorAll('.news-unit') ?? document.querySelectorAll('.news-unit');
+    final listUnits = list?.querySelectorAll('.news-unit') ?? const <Element>[];
+    final units = listUnits.isNotEmpty ? listUnits : document.querySelectorAll('.news-unit');
     for (final unit in units) {
       final link = unit.querySelector('.title a') ?? unit.querySelector('a[href*="/news/"], a[href*="/featured/"]');
       final url = link?.attributes['href']?.trim() ?? '';

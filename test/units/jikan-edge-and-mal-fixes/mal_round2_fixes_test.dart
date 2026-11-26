@@ -100,8 +100,8 @@ YouTube: @KitoAkari_Official
   });
 
   group('DataSource label', () {
-    test('uses Jikan Edge brand label', () {
-      expect(DataSource.jikan.label, 'Jikan Edge');
+    test('uses Jikan brand label', () {
+      expect(DataSource.jikan.label, 'Jikan');
       expect(DataSource.tenrai.label, 'Tenrai');
     });
   });
@@ -142,7 +142,7 @@ YouTube: @KitoAkari_Official
   });
 
   group('Review date parsing & sorting', () {
-    test('sorts newest, oldest, helpful, highest, and lowest accurately', () {
+    test('sorts newest, oldest, and helpful accurately', () {
       final r1 = AnimeReview(
         malId: 1,
         date: 'Mar 24, 2024',
@@ -181,14 +181,6 @@ YouTube: @KitoAkari_Official
       expect(
         filterReviews(all, sort: ReviewSort.helpful).map((r) => r.malId),
         [1, 2, 3, 4],
-      );
-      expect(
-        filterReviews(all, sort: ReviewSort.highest).map((r) => r.malId),
-        [2, 3, 1, 4],
-      );
-      expect(
-        filterReviews(all, sort: ReviewSort.lowest).map((r) => r.malId),
-        [1, 3, 2, 4],
       );
     });
   });

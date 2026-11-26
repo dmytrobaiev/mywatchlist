@@ -198,6 +198,19 @@ class JikanFallbacks {
   static Future<List<AnimeReview>> Function(int id, String category, int page)
       reviews = _mwlReviews;
 
+  /// Server-side sorted/filtered reviews of one title. Delegates to [reviews]
+  /// for the default unfiltered `mostvoted` query so existing test stubs on
+  /// [reviews] continue working transparently.
+  static Future<List<AnimeReview>> Function(
+    int id,
+    String category,
+    int page, {
+    String? sort,
+    String? filterCheck,
+    String? preliminary,
+    String? spoiler,
+  }) reviewsQuery = _mwlReviewsQuery;
+
   /// Forum topics of one title from MyAnimeList's forum page
   /// (`forum/?animeid=` / `mangaid=`).
   static Future<List<AnimeForum>> Function(int id, String category) forum =
@@ -226,6 +239,7 @@ class JikanFallbacks {
     news = MalNewsPage.fetch;
     userUpdates = _malUserUpdates;
     reviews = _mwlReviews;
+    reviewsQuery = _mwlReviewsQuery;
     forum = _malForum;
     characters = _mwlCharacters;
     headStart = const Duration(seconds: 3);
@@ -243,6 +257,34 @@ class JikanFallbacks {
     // No answer from the backend fails (#361): an empty list would win the race.
     final list = await MwlApi.i
         .requireReviewList(id: id, category: category, page: page)
+        .timeout(timeout);
+    return list.map(reviewFromHtml).toList();
+  }
+
+  static Future<List<AnimeReview>> _mwlReviewsQuery(
+    int id,
+    String category,
+    int page, {
+    String? sort,
+    String? filterCheck,
+    String? preliminary,
+    String? spoiler,
+  }) async {
+    final isDefault = (sort == null || sort == 'mostvoted') &&
+        (filterCheck == null || filterCheck.isEmpty) &&
+        (preliminary == null || preliminary.isEmpty) &&
+        (spoiler == null || spoiler.isEmpty);
+    if (isDefault) return reviews(id, category, page);
+    final list = await MwlApi.i
+        .requireReviewList(
+          id: id,
+          category: category,
+          page: page,
+          sort: sort,
+          filterCheck: filterCheck,
+          preliminary: preliminary,
+          spoiler: spoiler,
+        )
         .timeout(timeout);
     return list.map(reviewFromHtml).toList();
   }

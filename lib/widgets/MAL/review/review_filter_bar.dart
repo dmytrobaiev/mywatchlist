@@ -3,29 +3,26 @@ import 'package:intl/intl.dart';
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/widgets/MAL/review/review_logic.dart';
 
-/// Filters of a review list: sort, score and tags.
+/// Filters of a review list: sort and MAL-supported tags/flags.
 @immutable
 class ReviewFilters {
   final ReviewSort sort;
-  final int? score;
   final Set<String> tags;
 
-  const ReviewFilters({this.sort = ReviewSort.helpful, this.score, this.tags = const {}});
+  const ReviewFilters({this.sort = ReviewSort.helpful, this.tags = const {}});
 
-  bool get narrowed => score != null || tags.isNotEmpty;
+  bool get narrowed => tags.isNotEmpty;
 
-  ReviewFilters copyWith({ReviewSort? sort, int? Function()? score, Set<String>? tags}) => ReviewFilters(
+  ReviewFilters copyWith({ReviewSort? sort, Set<String>? tags}) => ReviewFilters(
         sort: sort ?? this.sort,
-        score: score != null ? score() : this.score,
         tags: tags ?? this.tags,
       );
 
-  /// The same sort without score or tags.
+  /// The same sort without tag filters.
   ReviewFilters cleared() => ReviewFilters(sort: sort);
 }
 
-/// DailyAL's filter row above reviews: score distribution, sort, score and
-/// one button per tag, in one horizontal strip.
+/// Filter row above reviews: sort and one button per MAL tag/flag, in one horizontal strip.
 class ReviewFilterBar extends StatelessWidget {
   final ReviewFilters filters;
   final Map<int, int> distribution;
@@ -42,8 +39,6 @@ class ReviewFilterBar extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
   });
 
-  static const List<int> _allScores = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -54,8 +49,6 @@ class ReviewFilterBar extends StatelessWidget {
         child: ListView(
           scrollDirection: Axis.horizontal,
           children: [
-            _buildScoreSelect(theme),
-            const SizedBox(width: 8),
             _buildSortSelect(theme),
             for (final tag in tags) _buildTagButton(theme, tag),
           ],
@@ -102,62 +95,6 @@ class ReviewFilterBar extends StatelessWidget {
             Icon(sort.icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 6),
             Text(sort.label, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScoreSelect(ThemeData theme) {
-    final selected = filters.score;
-    final foreground = selected != null ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurfaceVariant;
-    return PopupMenuButton<int>(
-      tooltip: S.current.Social_Reviews_Filter_Score,
-      constraints: const BoxConstraints(minWidth: 84, maxWidth: 112),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      onSelected: (value) => onChanged(filters.copyWith(score: () => value)),
-      itemBuilder: (_) => [
-        for (final score in _allScores)
-          PopupMenuItem<int>(
-            value: score,
-            height: 40,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset('assets/images/star.png', height: 16),
-                const SizedBox(width: 8),
-                Text(
-                  '$score',
-                  style: TextStyle(
-                    fontWeight: score == selected ? FontWeight.w600 : FontWeight.normal,
-                    color: score == selected ? theme.colorScheme.primary : null,
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-      child: _Pill(
-        color: selected != null ? theme.colorScheme.primaryContainer : theme.colorScheme.surfaceContainerHighest,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset('assets/images/star.png', height: 14),
-            const SizedBox(width: 6),
-            if (selected != null) ...[
-              Text('$selected', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: foreground)),
-              const SizedBox(width: 6),
-              // Clearing sits on its own tap target so it never opens the menu.
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(filters.copyWith(score: () => null)),
-                child: Tooltip(
-                  message: S.current.Social_Reviews_Clear_Filter,
-                  child: Icon(Icons.close, size: 16, color: foreground),
-                ),
-              ),
-            ] else
-              Icon(Icons.arrow_drop_down, size: 20, color: foreground),
           ],
         ),
       ),

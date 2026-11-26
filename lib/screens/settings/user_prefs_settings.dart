@@ -71,6 +71,7 @@ class UserPrefSettingsPage extends StatelessWidget {
           showMyListOnProfiles: d.showMyListOnProfiles,
           preferredLinkType: d.preferredLinkType,
           detailsExpanded: d.detailsExpanded,
+          showTagSuggestions: d.showTagSuggestions,
         )));
   }
 
@@ -211,6 +212,14 @@ class UserPrefSettingsPage extends StatelessWidget {
               read: (p) => p.general.showOnlyLastQuote,
               toEvent: (v) =>
                   GeneralPreferencesChanged((p) => p.copyWith(showOnlyLastQuote: v)),
+            ),
+            PrefSwitchTile(
+              icon: Icons.tag_rounded,
+              title: 'Show tag suggestions',
+              subtitle: 'Suggest # special search tags while typing',
+              read: (p) => p.general.showTagSuggestions,
+              toEvent: (v) =>
+                  GeneralPreferencesChanged((p) => p.copyWith(showTagSuggestions: v)),
             ),
           ],
         ),

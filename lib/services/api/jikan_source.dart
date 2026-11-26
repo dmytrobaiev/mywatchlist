@@ -13,23 +13,22 @@ enum DataSource {
 
   /// Brand name of the server (never translated).
   String get label => switch (this) {
-        DataSource.jikan => 'Jikan Edge',
+        DataSource.jikan => 'Jikan',
         DataSource.tenrai => 'Tenrai',
       };
 }
 
 /// How long Jikan stays muted after it did not answer (settings choices).
 enum JikanMuteDuration {
-  oneWeek(Duration(days: 7)),
-  twoWeeks(Duration(days: 14)),
-  oneMonth(Duration(days: 30)),
-  threeMonths(Duration(days: 90));
+  oneDay(Duration(days: 1)),
+  threeDays(Duration(days: 3)),
+  oneWeek(Duration(days: 7));
 
   const JikanMuteDuration(this.duration);
 
   final Duration duration;
 
-  static const JikanMuteDuration fallback = JikanMuteDuration.oneMonth;
+  static const JikanMuteDuration fallback = JikanMuteDuration.oneDay;
 
   static JikanMuteDuration byName(String? name) =>
       values.where((d) => d.name == name).firstOrNull ?? fallback;

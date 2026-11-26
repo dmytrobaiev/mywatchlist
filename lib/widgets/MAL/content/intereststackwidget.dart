@@ -5,7 +5,6 @@ import 'package:mywatchlist/screens/MAL/interest_stack_detail_screen.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/anime_detailed_html.dart';
 import 'package:mywatchlist/widgets/MAL/review/user_link.dart';
 import 'package:mywatchlist/widgets/common/app_image.dart';
-import 'package:mywatchlist/widgets/common/image_preview.dart';
 import 'package:mywatchlist/widgets/common/share_builder.dart';
 
 /// Interest stacks as a horizontal strip (detail page) or a vertical list (stack screen,
@@ -167,8 +166,9 @@ class InterestStackAuthor extends StatelessWidget {
   }
 }
 
-/// Fan of up to a few posters (the first of [images] at the back, the last in front); a
-/// tap opens them in the image viewer. With no picture, a neutral placeholder.
+/// Decorative layered stack of posters: a rounded front cover with up to two
+/// stepped receding layers peeking above the top edge showing slightly tinted
+/// cover artwork. Purely visual (non-interactive).
 class InterestStackPictures extends StatelessWidget {
   final List<String> images;
 
@@ -177,46 +177,84 @@ class InterestStackPictures extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (images.isEmpty) {
+    final clean = [
+      for (final url in images)
+        if (url.trim().isNotEmpty) url.trim(),
+    ];
+    if (clean.isEmpty) {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(Icons.collections_bookmark_outlined, color: scheme.onSurfaceVariant),
+        child: Center(
+          child: Icon(
+            Icons.collections_bookmark_outlined,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
       );
     }
-    return Semantics(
-      button: true,
-      label: S.current.Social_Stack_Zoom,
+    // Reversed input from `_StackCard` puts the primary cover last; pick the
+    // front cover cleanly and up to 2 receding tinted cover layers behind it.
+    final ordered = clean.reversed.toList();
+    final front = ordered.first;
+    final backCount = ordered.length >= 3 ? 2 : (ordered.length == 2 ? 1 : 2);
+    const stepY = 5.0;
+    const stepX = 7.0;
+    final frontTop = backCount * stepY;
+
+    return IgnorePointer(
       child: Stack(
+        fit: StackFit.expand,
         children: [
-          for (final entry in images.asMap().entries)
-            PositionedDirectional(
-              end: entry.key * 20.0,
-              top: entry.key * 10.0 + 10.0,
-              bottom: entry.key * 10.0 + 10.0,
-              child: GestureDetector(
-                onTap: () => zoomInImageList(context, images.reversed.toList()),
-                // A thin outline separates the overlapping posters (no blurred shadow, which
-                // is costly on every card of a list).
-                child: DecoratedBox(
-                  position: DecorationPosition.foreground,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: scheme.surface.withValues(alpha: 0.9), width: 1.5),
-                  ),
-                  child: AspectRatio(
-                    aspectRatio: 0.68,
-                    child: AppImage(
-                      url: entry.value,
+          for (var depth = backCount; depth >= 1; depth--)
+            Positioned(
+              left: depth * stepX,
+              right: depth * stepX,
+              top: (backCount - depth) * stepY,
+              bottom: depth * stepY,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AppImage(
+                      url: ordered.length > depth ? ordered[depth] : front,
                       fit: BoxFit.cover,
-                      borderRadius: BorderRadius.circular(4),
+                      placeholderColor: scheme.surfaceContainerHighest,
                     ),
-                  ),
+                    ColoredBox(
+                      color: Colors.black.withValues(
+                        alpha: depth == 1 ? 0.30 : 0.48,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: frontTop,
+            bottom: 0,
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: scheme.surface.withValues(alpha: 0.7),
+                  width: 1,
+                ),
+              ),
+              child: AppImage(
+                url: front,
+                fit: BoxFit.cover,
+                borderRadius: BorderRadius.circular(10),
+                placeholderColor: scheme.surfaceContainerHighest,
+              ),
+            ),
+          ),
         ],
       ),
     );

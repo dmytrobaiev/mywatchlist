@@ -52,7 +52,7 @@ void main() {
       }
     });
 
-    test('genres have a picture except the few DailyAL never drew', () {
+    test('every genre has a picture', () {
       final missing = <String>[];
       for (final category in ['anime', 'manga']) {
         for (final g in ExploreData.genreGroups(category)) {
@@ -61,7 +61,7 @@ void main() {
           }
         }
       }
-      expect(missing, unorderedEquals(['82_anime', '83_anime', '83_manga']));
+      expect(missing, isEmpty);
     });
 
     test('identical pictures resolve to one file', () {

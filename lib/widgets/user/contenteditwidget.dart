@@ -6,6 +6,7 @@ import 'package:mywatchlist/constants/constants.dart'
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/services/api/MAL/mal_connect.dart';
+import 'package:mywatchlist/services/api/MAL/web/mal_web_client.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
 import 'package:mywatchlist/user/private_notes/private_notes_store.dart';
 import 'package:mywatchlist/utils/app_routes.dart';
@@ -49,6 +50,107 @@ enum _Phase { loading, ready, failed, sessionExpired, notEditable }
 /// The entry is loaded with every list field when the sheet opens, so each
 /// field is pre-filled exactly as on the tracker; [contentDetailed] is not
 /// needed for that and may be null.
+/// Draggable modal bottom sheet wrapper for [ContentEditWidget] (and
+/// [DetailEditPanel]). Replaces the fixed `ConstrainedBox` with a
+/// [DraggableScrollableSheet] that snaps between compact quick-edit height
+/// and expanded (`0.85`) height, driving a single scrollable via the sheet's
+/// [ScrollController] with keyboard bottom padding.
+class QuickEditModalSheet extends StatefulWidget {
+  final Widget Function(
+    BuildContext context,
+    ScrollController scrollController,
+    bool expanded,
+    ValueChanged<bool> onExpandedChanged,
+  ) builder;
+
+  const QuickEditModalSheet({super.key, required this.builder});
+
+  /// Convenience builder for a standalone [ContentEditWidget] inside one
+  /// scrollable driven by the sheet's [ScrollController].
+  factory QuickEditModalSheet.editor({
+    Key? key,
+    required Widget Function(
+      BuildContext context,
+      bool expanded,
+      ValueChanged<bool> onExpandedChanged,
+    ) editorBuilder,
+  }) =>
+      QuickEditModalSheet(
+        key: key,
+        builder: (context, scrollController, expanded, onExpandedChanged) =>
+            SingleChildScrollView(
+          controller: scrollController,
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+          child: editorBuilder(context, expanded, onExpandedChanged),
+        ),
+      );
+
+  @override
+  State<QuickEditModalSheet> createState() => _QuickEditModalSheetState();
+}
+
+class _QuickEditModalSheetState extends State<QuickEditModalSheet> {
+  static const double _maxSize = 0.85;
+  static const double _minSize = 0.25;
+
+  final DraggableScrollableController _controller = DraggableScrollableController();
+  bool _expanded = false;
+  double _compactSize = 0.45;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onSheetExtentChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onSheetExtentChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onSheetExtentChanged() {
+    if (!_controller.isAttached) return;
+    final midpoint = (_compactSize + _maxSize) / 2;
+    final shouldExpand = _controller.size >= midpoint;
+    if (shouldExpand != _expanded) {
+      setState(() => _expanded = shouldExpand);
+    }
+  }
+
+  void _setExpanded(bool open) {
+    if (_expanded != open) setState(() => _expanded = open);
+    if (!_controller.isAttached) return;
+    _controller.animateTo(
+      open ? _maxSize : _compactSize,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenH = MediaQuery.sizeOf(context).height;
+    _compactSize = screenH > 0 ? (380 / screenH).clamp(0.36, 0.58) : 0.45;
+    return DraggableScrollableSheet(
+      controller: _controller,
+      expand: false,
+      snap: true,
+      initialChildSize: _compactSize,
+      minChildSize: _minSize,
+      maxChildSize: _maxSize,
+      snapSizes: [_compactSize, _maxSize],
+      builder: (context, scrollController) => widget.builder(
+        context,
+        scrollController,
+        _expanded,
+        _setExpanded,
+      ),
+    );
+  }
+}
+
 class ContentEditWidget extends StatefulWidget {
   final int id;
   final MalAnime? contentDetailed;
@@ -60,9 +162,16 @@ class ContentEditWidget extends StatefulWidget {
   final ValueChanged<dynamic>? onListStatusChange;
   final VoidCallback? onDelete;
 
-  /// Closes the sheet or panel holding the editor: a swipe down on the handle while
-  /// "More options" is collapsed. Without it the swipe only collapses.
+  /// Closes the sheet or panel holding the editor.
   final VoidCallback? onDismiss;
+
+  /// Enables manual [EditSwipeArea] gesture handling (true for inline panels;
+  /// false inside [QuickEditModalSheet] so it does not fight the sheet drag).
+  final bool enableSwipe;
+
+  /// External expansion state synced with [QuickEditModalSheet].
+  final bool? expanded;
+  final ValueChanged<bool>? onExpandedChanged;
 
   /// Defaults to MyAnimeList; tests inject a fake.
   final ListEntryService? service;
@@ -78,6 +187,9 @@ class ContentEditWidget extends StatefulWidget {
     this.onListStatusChange,
     this.onDelete,
     this.onDismiss,
+    this.enableSwipe = true,
+    this.expanded,
+    this.onExpandedChanged,
     this.service,
     this.notesStore,
     this.clock,
@@ -98,12 +210,15 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
 
   final TextEditingController _progressController = TextEditingController();
   final TextEditingController _volumesController = TextEditingController();
+  final TextEditingController _commentsController = TextEditingController();
+  final FocusNode _commentsFocus = FocusNode();
+  bool _commentsDirty = false;
 
   /// Last change of the MyAnimeList entry (`my_list_status.updated_at`, then
   /// the time of this sheet's last write); null when unknown.
   DateTime? _updatedAt;
 
-  bool _advanced = false;
+  late bool _advanced = widget.expanded ?? false;
   bool _repeatOpen = false;
   bool _datesOpen = true;
   bool _othersOpen = false;
@@ -126,7 +241,14 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
     super.initState();
     _extrasKey = EditExtras.keyOf(widget.id, widget.category);
     _extras.addListener(_onExtras);
+    _commentsFocus.addListener(_onCommentsFocus);
     _load();
+  }
+
+  void _onCommentsFocus() {
+    if (!_commentsFocus.hasFocus && _commentsDirty) {
+      _saveInlineComments();
+    }
   }
 
   void _onExtras() {
@@ -146,6 +268,9 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   @override
   void didUpdateWidget(covariant ContentEditWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.expanded != null && widget.expanded != _advanced) {
+      _advanced = widget.expanded!;
+    }
     // The detail page refreshes [contentDetailed] after each write; the sheet
     // already holds the tracker's answer, so only another entry reloads.
     if (oldWidget.id != widget.id || oldWidget.category != widget.category) {
@@ -160,6 +285,9 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   void dispose() {
     _extras.removeListener(_onExtras);
     if (_claimed) _extras.release(_extrasKey);
+    _commentsFocus.removeListener(_onCommentsFocus);
+    _commentsFocus.dispose();
+    _commentsController.dispose();
     _progressController.dispose();
     _volumesController.dispose();
     super.dispose();
@@ -201,6 +329,10 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   void _syncControllers() {
     _progressController.text = '${_entry?.progress ?? 0}';
     _volumesController.text = '${_entry?.volumes ?? 0}';
+    if (!_commentsFocus.hasFocus) {
+      _commentsController.text = decodeMalText(_entry?.comments ?? '');
+      _commentsDirty = false;
+    }
   }
 
   AppPreferences get _prefs =>
@@ -240,6 +372,11 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
       if (mounted) {
         _notify(S.current.Edit_Session_Expired);
         setState(() => _phase = _Phase.sessionExpired);
+      }
+    } on MalWebNoSession {
+      if (mounted) {
+        _notify('Sign in to MyAnimeList Web in Settings to clear dates.');
+        setState(_syncControllers);
       }
     } catch (e) {
       debugPrint('ContentEditWidget update: $e');
@@ -330,12 +467,12 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
         : S.current.Negative_chapters_not_allowed;
   }
 
-  Future<void> _editComments() async {
+  Future<void> _saveInlineComments() async {
     final initial = decodeMalText(_entry?.comments ?? '');
-    final text = await showTextEditor(context,
-        title: S.current.Edit_Comments, initial: initial);
-    if (text == null || text == initial) return;
-    _send(EditField.comments, EntryPatch(comments: text));
+    final text = _commentsController.text;
+    _commentsDirty = false;
+    if (text == initial) return;
+    await _send(EditField.comments, EntryPatch(comments: text));
   }
 
   Future<void> _editTags() async {
@@ -497,16 +634,23 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   }
 
   Widget _editor(EditableContent content, ListEntry entry) {
+    final column = _editorColumn(content, entry);
+    if (!widget.enableSwipe) {
+      return KeyedSubtree(
+        key: const ValueKey('edit-form'),
+        child: column,
+      );
+    }
     return EditSwipeArea(
       key: const ValueKey('edit-form'),
       expanded: _advanced,
       onSwipe: _onSwipe,
-      child: _editorColumn(content, entry),
+      child: column,
     );
   }
 
-  /// Up expands "More options"; down collapses them, or closes the sheet
-  /// once they are collapsed (MoeList-like), anywhere on the sheet.
+  /// Up expands "More options"; down collapses them, or closes the panel
+  /// once they are collapsed.
   void _onSwipe(EditSwipe swipe) {
     switch (swipe) {
       case EditSwipe.expand:
@@ -547,8 +691,11 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
     );
   }
 
-  void _toggleAdvanced([bool? open]) =>
-      setState(() => _advanced = open ?? !_advanced);
+  void _toggleAdvanced([bool? open]) {
+    final next = open ?? !_advanced;
+    setState(() => _advanced = next);
+    widget.onExpandedChanged?.call(next);
+  }
 
   Widget _handle() {
     final scheme = Theme.of(context).colorScheme;
@@ -889,17 +1036,41 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   }
 
   Widget _othersEditor(ListEntry entry) {
+    final savingComments = _busy.contains(EditField.comments);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextPreviewTile(
+        FieldCaption(
+          S.current.Edit_Comments,
+          action: savingComments
+              ? const SmallSpinner()
+              : _commentsDirty
+                  ? TextButton(
+                      onPressed: _saveInlineComments,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: Text(S.current.Edit_Save),
+                    )
+                  : null,
+        ),
+        TextField(
           key: const ValueKey('edit-comments'),
-          label: S.current.Edit_Comments,
-          text: decodeMalText(entry.comments),
-          emptyText: S.current.Edit_Comments_Empty,
-          icon: Icons.chat_bubble_outline,
-          busy: _busy.contains(EditField.comments),
-          onTap: _editComments,
+          controller: _commentsController,
+          focusNode: _commentsFocus,
+          enabled: !savingComments,
+          minLines: 2,
+          maxLines: 6,
+          keyboardType: TextInputType.multiline,
+          onChanged: (_) {
+            final dirty = _commentsController.text != decodeMalText(_entry?.comments ?? '');
+            if (dirty != _commentsDirty) setState(() => _commentsDirty = dirty);
+          },
+          decoration: InputDecoration(
+            hintText: S.current.Edit_Comments_Empty,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          ),
         ),
         const SizedBox(height: 8),
         TextPreviewTile(

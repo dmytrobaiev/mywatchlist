@@ -115,56 +115,80 @@ class _ClubCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final members = club.members;
-    return SizedBox(
-      width: 220,
-      child: Card(
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.5)),
-        ),
-        child: InkWell(
-          onTap: () => gotoPage(context: context, newPage: ClubScreen(clubHtml: club)),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 64,
-                height: 64,
-                child: club.imgUrl == null
-                    ? ColoredBox(
-                        color: colors.surfaceContainerHighest,
-                        child: Icon(Icons.groups_rounded, color: colors.onSurfaceVariant),
-                      )
-                    : AppImage(url: club.imgUrl, width: 64, height: 64),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(club.name ?? '',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                      if (members != null && members.isNotEmpty)
-                        Text('$members ${S.current.Members}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: colors.onSurfaceVariant)),
-                    ],
-                  ),
+    final clubId = club.id;
+    if ((club.imgUrl == null || club.imgUrl!.isEmpty) && clubId != null) {
+      ClubPictures.instance.ensure(clubId);
+    }
+    return ListenableBuilder(
+      listenable: ClubPictures.instance,
+      builder: (context, _) {
+        final resolvedUrl = (club.imgUrl != null && club.imgUrl!.isNotEmpty)
+            ? club.imgUrl
+            : (clubId != null ? ClubPictures.instance.pictureOf(clubId) : null);
+        return SizedBox(
+          width: 220,
+          child: Card(
+            elevation: 0,
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.5)),
+            ),
+            child: InkWell(
+              onTap: () => gotoPage(
+                context: context,
+                newPage: ClubScreen(
+                  clubHtml: resolvedUrl != null && resolvedUrl != club.imgUrl
+                      ? ClubHtml(
+                          id: club.id,
+                          name: club.name,
+                          imgUrl: resolvedUrl,
+                          members: club.members,
+                        )
+                      : club,
                 ),
               ),
-            ],
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 64,
+                    height: 64,
+                    child: resolvedUrl == null
+                        ? ColoredBox(
+                            color: colors.surfaceContainerHighest,
+                            child: Icon(Icons.groups_rounded, color: colors.onSurfaceVariant),
+                          )
+                        : AppImage(url: resolvedUrl, width: 64, height: 64),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(club.name ?? '',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600)),
+                          if (members != null && members.isNotEmpty)
+                            Text('$members ${S.current.Members}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall
+                                    ?.copyWith(color: colors.onSurfaceVariant)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -252,7 +252,10 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
         ),
       UserProfileTab.history => HistorySection(username: data.username),
       UserProfileTab.comments => CommentsSection(username: data.username),
-      UserProfileTab.reviews => ReviewsSection(username: data.username),
+      UserProfileTab.reviews => ReviewsSection(
+            username: data.username,
+            pictureUrl: data.pictureUrl,
+          ),
       UserProfileTab.recommendations => RecommendationsSection(username: data.username),
       UserProfileTab.stacks => StacksSection(username: data.username),
       UserProfileTab.blog => BlogSection(username: data.username),
@@ -436,6 +439,7 @@ class _ProfileTabStripState extends State<ProfileTabStrip> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onTab);
+    widget.controller.animation?.addListener(_onSwipeAnimation);
   }
 
   @override
@@ -443,7 +447,9 @@ class _ProfileTabStripState extends State<ProfileTabStrip> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onTab);
+      oldWidget.controller.animation?.removeListener(_onSwipeAnimation);
       widget.controller.addListener(_onTab);
+      widget.controller.animation?.addListener(_onSwipeAnimation);
       _index = widget.controller.index;
     }
     if (oldWidget.tabs.length != widget.tabs.length) {
@@ -454,14 +460,24 @@ class _ProfileTabStripState extends State<ProfileTabStrip> {
   @override
   void dispose() {
     widget.controller.removeListener(_onTab);
+    widget.controller.animation?.removeListener(_onSwipeAnimation);
     super.dispose();
   }
 
-  void _onTab() {
-    final index = widget.controller.index;
-    if (index == _index) return;
+  void _onSwipeAnimation() {
+    final anim = widget.controller.animation;
+    if (anim == null || widget.tabs.isEmpty) return;
+    final next = anim.value.round().clamp(0, widget.tabs.length - 1);
+    _selectIndex(next);
+  }
+
+  void _onTab() => _selectIndex(widget.controller.index);
+
+  void _selectIndex(int index) {
+    if (index == _index || index < 0 || index >= widget.tabs.length) return;
     setState(() => _index = index);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || index >= _keys.length) return;
       final target = _keys[index].currentContext;
       if (target != null && target.mounted) {
         Scrollable.ensureVisible(

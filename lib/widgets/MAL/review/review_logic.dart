@@ -4,22 +4,77 @@ import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_anime_review.dart';
 import 'package:mywatchlist/widgets/common/share_builder.dart';
 
-/// Order of the review list.
-enum ReviewSort { helpful, newest, oldest, highest, lowest }
+/// Order of the review list (backed by MAL's server-side review sort).
+enum ReviewSort { helpful, newest, oldest }
 
 extension ReviewSortLabel on ReviewSort {
   String get label => switch (this) {
         ReviewSort.helpful => S.current.Helpful,
         ReviewSort.newest => S.current.Social_Reviews_Sort_Newest,
         ReviewSort.oldest => S.current.Social_Reviews_Sort_Oldest,
-        ReviewSort.highest => S.current.Social_Reviews_Sort_Highest,
-        ReviewSort.lowest => S.current.Social_Reviews_Sort_Lowest,
       };
 
   IconData get icon => switch (this) {
-        ReviewSort.helpful || ReviewSort.newest || ReviewSort.highest => Icons.arrow_downward,
-        ReviewSort.oldest || ReviewSort.lowest => Icons.arrow_upward,
+        ReviewSort.helpful || ReviewSort.newest => Icons.arrow_downward,
+        ReviewSort.oldest => Icons.arrow_upward,
       };
+
+  /// Query value expected by MyAnimeList's `reviews` endpoint.
+  String get malParam => switch (this) {
+        ReviewSort.helpful => 'mostvoted',
+        ReviewSort.newest => 'newest',
+        ReviewSort.oldest => 'oldest',
+      };
+}
+
+/// MAL `filter_check` tag IDs for server-side review filtering.
+const Map<String, int> malReviewTagIds = {
+  'Recommended': 1,
+  'Mixed Feelings': 2,
+  'Not Recommended': 3,
+  'Well-written': 4,
+  'Informative': 5,
+  'Funny': 6,
+  'Creative': 7,
+};
+
+/// Every server-supported MAL review tag/flag shown in the filter bar.
+const List<String> malReviewAllTags = [
+  'Recommended',
+  'Mixed Feelings',
+  'Not Recommended',
+  'Well-written',
+  'Informative',
+  'Funny',
+  'Creative',
+  'Preliminary',
+  'Spoiler',
+];
+
+/// Maps selected normalized review tags into MAL's native `filter_check`,
+/// `preliminary`, and `spoiler` query parameters.
+({String? filterCheck, String? preliminary, String? spoiler}) malReviewQueryForTags(
+    Set<String> tags) {
+  final ids = <int>[];
+  String? preliminary;
+  String? spoiler;
+  for (final raw in tags) {
+    final norm = normalizeReviewTag(raw);
+    final id = malReviewTagIds[norm];
+    if (id != null) {
+      ids.add(id);
+    } else if (norm == 'Preliminary') {
+      preliminary = 'on';
+    } else if (norm == 'Spoiler') {
+      spoiler = 'on';
+    }
+  }
+  ids.sort();
+  return (
+    filterCheck: ids.isEmpty ? null : ids.join(','),
+    preliminary: preliminary,
+    spoiler: spoiler,
+  );
 }
 
 /// Number of reviews per score (reviews without a score are not counted).
@@ -75,16 +130,14 @@ DateTime? parseReviewDate(String? raw) {
   }
 }
 
-/// Reviews matching [score] and any of [tags] (both optional), sorted by [sort].
+/// Reviews matching any of [tags] (optional), sorted by [sort].
 List<AnimeReview> filterReviews(
   List<AnimeReview> reviews, {
   ReviewSort sort = ReviewSort.newest,
-  int? score,
   Set<String> tags = const {},
 }) {
   final normalizedFilterTags = tags.map(normalizeReviewTag).toSet();
   final filtered = reviews.where((review) {
-    if (score != null && review.score != score) return false;
     if (normalizedFilterTags.isNotEmpty) {
       final own = review.tags;
       if (own == null || !own.any((t) => normalizedFilterTags.contains(normalizeReviewTag(t)))) {
@@ -130,34 +183,6 @@ List<AnimeReview> filterReviews(
         }
         final idCmp = (a.$2.malId ?? 0).compareTo(b.$2.malId ?? 0);
         return idCmp != 0 ? idCmp : b.$1.compareTo(a.$1);
-      });
-    case ReviewSort.highest:
-      indexed.sort((a, b) {
-        final sa = a.$2.score;
-        final sb = b.$2.score;
-        if (sa != null && sb != null) {
-          final cmp = sb.compareTo(sa);
-          if (cmp != 0) return cmp;
-        } else if (sa != null) {
-          return -1;
-        } else if (sb != null) {
-          return 1;
-        }
-        return a.$1.compareTo(b.$1);
-      });
-    case ReviewSort.lowest:
-      indexed.sort((a, b) {
-        final sa = a.$2.score;
-        final sb = b.$2.score;
-        if (sa != null && sb != null) {
-          final cmp = sa.compareTo(sb);
-          if (cmp != 0) return cmp;
-        } else if (sa != null) {
-          return -1;
-        } else if (sb != null) {
-          return 1;
-        }
-        return a.$1.compareTo(b.$1);
       });
   }
   return [for (final entry in indexed) entry.$2];

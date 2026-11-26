@@ -184,54 +184,85 @@ class _ShowAnimeForumState extends State<ShowAnimeForum>
                     ),
                   ),
                   const SizedBox(height: 6),
-                  // Bottom row: author + date | post count
+                  // Bottom row: 3-column fixed-rail grid (author | date | replies)
                   Row(
                     children: [
-                      // Author
-                      Icon(
-                        Icons.person_outline,
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          topic.authorUsername ?? S.current.Res_Unknown,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                      // Author column
+                      Expanded(
+                        flex: 4,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.person_outline,
+                              size: 14,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                topic.authorUsername ?? S.current.Res_Unknown,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      // Date
-                      if (topic.date != null) ...[
-                        const SizedBox(width: 10),
-                        Icon(
-                          Icons.date_range,
-                          size: 14,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDate(topic.date),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                      // Post count
-                      Icon(
-                        Icons.forum_outlined,
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
+                      const SizedBox(width: 8),
+                      // Date column (fixed width for vertical alignment across cards)
+                      SizedBox(
+                        width: 102,
+                        child: topic.date != null
+                            ? Row(
+                                children: [
+                                  Icon(
+                                    Icons.date_range,
+                                    size: 14,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      _formatDate(topic.date),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : const SizedBox.shrink(),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${topic.comments ?? 0}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
+                      const SizedBox(width: 8),
+                      // Post count column (fixed width + tabular digits)
+                      SizedBox(
+                        width: 54,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.forum_outlined,
+                              size: 14,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '${topic.comments ?? 0}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -239,27 +270,36 @@ class _ShowAnimeForumState extends State<ShowAnimeForum>
                   // Last reply info
                   if (topic.lastComment != null) ...[
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.reply,
-                          size: 12,
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.7),
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            '${topic.lastComment!.authorUsername ?? ''} · ${_formatDate(topic.lastComment!.date)}',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant
-                                  .withValues(alpha: 0.7),
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                    Builder(builder: (context) {
+                      final author = topic.lastComment!.authorUsername?.trim() ?? '';
+                      final date = _formatDate(topic.lastComment!.date).trim();
+                      final lastText = [
+                        if (author.isNotEmpty) author,
+                        if (date.isNotEmpty) date,
+                      ].join(' · ');
+                      if (lastText.isEmpty) return const SizedBox.shrink();
+                      return Row(
+                        children: [
+                          Icon(
+                            Icons.reply,
+                            size: 12,
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.7),
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              lastText,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant
+                                    .withValues(alpha: 0.7),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
                   ],
                 ],
               ),

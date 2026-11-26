@@ -186,6 +186,7 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> with TickerPr
   SearchRequest? _request;
   bool _showPanel = false;
   bool _specialQuery = false;
+  String _lastQueryText = '';
 
   /// Bumped by every search / reset; an answer that comes back with an older value is dropped.
   int _searchToken = 0;
@@ -218,8 +219,10 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> with TickerPr
     }
     final initial = widget.searchQuery?.trim() ?? '';
     if (initial.isNotEmpty) {
+      _lastQueryText = initial;
       _searchController.text = initial;
-      _specialQuery = initial.startsWith('#');
+      _specialQuery =
+          initial.startsWith('#') && SpecialQuery.parse(initial.substring(1)) != null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _runSearch(initial);
       });

@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:mwl_commons/mwl_commons.dart' show LinkType;
 import 'package:mywatchlist/constants/constants.dart' show DisplayType, TitleLang;
 import 'package:mywatchlist/user/preferences/json_read.dart';
+import 'package:mywatchlist/user/preferences/sidebar_preferences.dart';
 
 /// Page shown when the app opens (DAL `startUpPageMobile` / `startUpPageTablet`).
 ///
@@ -83,6 +84,12 @@ class GeneralPreferences extends Equatable {
   final int dubIconStyle;
   final int dubMinSourceCount;
 
+  /// Order and visibility of "My space" items in the app sidebar.
+  final List<SidebarItemPreference> sidebarItems;
+
+  /// Whether `#...` special tag suggestions appear while typing in Search.
+  final bool showTagSuggestions;
+
   const GeneralPreferences({
     this.preferredTitle = TitleLang.ro,
     this.startupPage = StartupPage.home,
@@ -113,6 +120,8 @@ class GeneralPreferences extends Equatable {
     this.dubLanguage = 'english',
     this.dubIconStyle = 0,
     this.dubMinSourceCount = 1,
+    this.sidebarItems = defaultSidebarItems,
+    this.showTagSuggestions = false,
   });
 
   /// Colour of stats chart slot [index], or null when the theme colour applies.
@@ -146,6 +155,8 @@ class GeneralPreferences extends Equatable {
     String? dubLanguage,
     int? dubIconStyle,
     int? dubMinSourceCount,
+    List<SidebarItemPreference>? sidebarItems,
+    bool? showTagSuggestions,
   }) {
     return GeneralPreferences(
       preferredTitle: preferredTitle ?? this.preferredTitle,
@@ -173,6 +184,10 @@ class GeneralPreferences extends Equatable {
       dubLanguage: dubLanguage ?? this.dubLanguage,
       dubIconStyle: dubIconStyle ?? this.dubIconStyle,
       dubMinSourceCount: dubMinSourceCount ?? this.dubMinSourceCount,
+      sidebarItems: sidebarItems != null
+          ? normalizeSidebarItems(sidebarItems)
+          : this.sidebarItems,
+      showTagSuggestions: showTagSuggestions ?? this.showTagSuggestions,
     );
   }
 
@@ -208,6 +223,8 @@ class GeneralPreferences extends Equatable {
         'dubLanguage': dubLanguage,
         'dubIconStyle': dubIconStyle,
         'dubMinSourceCount': dubMinSourceCount,
+        'sidebarItems': encodeSidebarItems(sidebarItems),
+        'showTagSuggestions': showTagSuggestions,
       };
 
   factory GeneralPreferences.fromJson(Map<String, dynamic> json) {
@@ -239,6 +256,8 @@ class GeneralPreferences extends Equatable {
       dubLanguage: readString(json, 'dubLanguage', d.dubLanguage),
       dubIconStyle: readInt(json, 'dubIconStyle', d.dubIconStyle),
       dubMinSourceCount: readInt(json, 'dubMinSourceCount', d.dubMinSourceCount),
+      sidebarItems: decodeSidebarItems(json['sidebarItems']),
+      showTagSuggestions: readBool(json, 'showTagSuggestions', d.showTagSuggestions),
     );
   }
 
@@ -273,5 +292,7 @@ class GeneralPreferences extends Equatable {
         dubLanguage,
         dubIconStyle,
         dubMinSourceCount,
+        sidebarItems,
+        showTagSuggestions,
       ];
 }

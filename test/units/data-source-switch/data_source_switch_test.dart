@@ -26,15 +26,15 @@ void main() {
       expect(rig.tenraiServer.requests, isEmpty);
     });
 
-    test('Jikan fails the probe: Tenrai only, Jikan muted one month and saved', () async {
+    test('Jikan fails the probe: Tenrai only, Jikan muted one day and saved', () async {
       final rig = SourceRig(probe: false);
       final prefs = await _prefs();
       await rig.source.start(prefs);
       expect(rig.source.active, DataSource.tenrai);
-      expect(rig.source.jikanMutedUntil, rig.clock.add(const Duration(days: 30)));
+      expect(rig.source.jikanMutedUntil, rig.clock.add(const Duration(days: 1)));
       await Future<void>.delayed(Duration.zero);
       expect(DateTime.parse(prefs.getString(JikanSource.mutedUntilKey)!),
-          rig.clock.add(const Duration(days: 30)));
+          rig.clock.add(const Duration(days: 1)));
 
       final response = await rig.get('/anime/1/full');
       expect(response.body, contains('"tenrai"'));
@@ -190,11 +190,11 @@ void main() {
 
     test('Tenrai down while Jikan is no longer muted: Jikan takes over', () async {
       final rig = SourceRig(probe: false, tenrai: ServerMode.refused);
-      await rig.source.start(await _prefs());
-      // Ten days later the mute is shortened to one week: it is over, Tenrai stays the
+      await rig.source.start(await _prefs({JikanSource.muteDurationKey: 'oneWeek'}));
+      // Two days later the mute is shortened to one day: it is over, Tenrai stays the
       // source of the session until it fails.
-      rig.clock = rig.clock.add(const Duration(days: 10));
-      await rig.source.setMuteDuration(JikanMuteDuration.oneWeek);
+      rig.clock = rig.clock.add(const Duration(days: 2));
+      await rig.source.setMuteDuration(JikanMuteDuration.oneDay);
       expect(rig.source.jikanMuted, isFalse);
       expect(rig.source.active, DataSource.tenrai);
       final response = await rig.get('/anime/1/full');
@@ -241,34 +241,35 @@ void main() {
       rig.clock = rig.clock.add(const Duration(days: 2));
       rig.probe.answer = false;
       expect(await rig.source.testAgain(), DataSource.tenrai);
-      expect(rig.source.jikanMutedUntil, rig.clock.add(const Duration(days: 30)));
+      expect(rig.source.jikanMutedUntil, rig.clock.add(const Duration(days: 1)));
     });
 
     test('the mute duration is saved, read at launch and applied to the next mute', () async {
       final rig = SourceRig(probe: true);
       final prefs = await _prefs();
       await rig.source.start(prefs);
-      await rig.source.setMuteDuration(JikanMuteDuration.threeMonths);
-      expect(prefs.getString(JikanSource.muteDurationKey), 'threeMonths');
+      await rig.source.setMuteDuration(JikanMuteDuration.oneWeek);
+      expect(prefs.getString(JikanSource.muteDurationKey), 'oneWeek');
 
       final next = SourceRig(probe: false);
       await next.source.start(prefs);
-      expect(next.source.muteDuration, JikanMuteDuration.threeMonths);
-      expect(next.source.jikanMutedUntil, next.clock.add(const Duration(days: 90)));
+      expect(next.source.muteDuration, JikanMuteDuration.oneWeek);
+      expect(next.source.jikanMutedUntil, next.clock.add(const Duration(days: 7)));
     });
 
     test('changing the duration recomputes a running mute from its start', () async {
       final rig = SourceRig(probe: false);
       await rig.source.start(await _prefs());
       final start = rig.clock;
-      await rig.source.setMuteDuration(JikanMuteDuration.twoWeeks);
-      expect(rig.source.jikanMutedUntil, start.add(const Duration(days: 14)));
+      await rig.source.setMuteDuration(JikanMuteDuration.threeDays);
+      expect(rig.source.jikanMutedUntil, start.add(const Duration(days: 3)));
     });
 
-    test('default duration: one month', () {
-      expect(JikanMuteDuration.byName(null), JikanMuteDuration.oneMonth);
-      expect(JikanMuteDuration.byName('nonsense'), JikanMuteDuration.oneMonth);
-      expect(JikanSource().muteDuration, JikanMuteDuration.oneMonth);
+    test('default duration: one day', () {
+      expect(JikanMuteDuration.byName(null), JikanMuteDuration.oneDay);
+      expect(JikanMuteDuration.byName('nonsense'), JikanMuteDuration.oneDay);
+      expect(JikanMuteDuration.byName('oneMonth'), JikanMuteDuration.oneDay);
+      expect(JikanSource().muteDuration, JikanMuteDuration.oneDay);
     });
   });
 

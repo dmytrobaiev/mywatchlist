@@ -53,6 +53,48 @@ sealed class SpecialQuery {
   static String season(SeasonType season, int year) => '#${seasonMap[season]}@$year';
 
   static String suggested(String category) => '#suggested@$category';
+
+  /// Matching `#...` preset suggestions for [raw] (used when tag suggestions
+  /// are enabled in Settings).
+  static List<({String query, String label})> suggestions(String raw, [DateTime? now]) {
+    final trimmed = raw.trim().toLowerCase();
+    if (!trimmed.startsWith('#')) return const [];
+    final needle = trimmed.substring(1);
+    final year = (now ?? DateTime.now()).year;
+    final all = <({String query, String label})>[
+      (query: '#all', label: 'Top All Anime'),
+      (query: '#airing', label: 'Top Airing Anime'),
+      (query: '#upcoming', label: 'Top Upcoming Anime'),
+      (query: '#tv', label: 'Top Anime TV Series'),
+      (query: '#ova', label: 'Top Anime OVA Series'),
+      (query: '#movie', label: 'Top Anime Movies'),
+      (query: '#special', label: 'Top Anime Specials'),
+      (query: '#bypopularity', label: 'Most Popular Anime'),
+      (query: '#favorite', label: 'Most Favorited Anime'),
+      (query: '#all@manga', label: 'Top All Manga'),
+      (query: '#manga@manga', label: 'Top Manga'),
+      (query: '#novels@manga', label: 'Top Novels'),
+      (query: '#oneshots@manga', label: 'Top One-shots'),
+      (query: '#doujin@manga', label: 'Top Doujinshi'),
+      (query: '#manhwa@manga', label: 'Top Manhwa'),
+      (query: '#manhua@manga', label: 'Top Manhua'),
+      (query: '#bypopularity@manga', label: 'Most Popular Manga'),
+      (query: '#favorite@manga', label: 'Most Favorited Manga'),
+      (query: '#winter@$year', label: 'Winter $year Anime'),
+      (query: '#spring@$year', label: 'Spring $year Anime'),
+      (query: '#summer@$year', label: 'Summer $year Anime'),
+      (query: '#fall@$year', label: 'Fall $year Anime'),
+      (query: '#suggested@anime', label: 'Suggested Anime'),
+      (query: '#suggested@manga', label: 'Suggested Manga'),
+    ];
+    if (needle.isEmpty) return all.take(10).toList();
+    return [
+      for (final item in all)
+        if (item.query.substring(1).contains(needle) ||
+            item.label.toLowerCase().contains(needle))
+          item,
+    ];
+  }
 }
 
 class RankingQuery extends SpecialQuery {

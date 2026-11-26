@@ -10,6 +10,7 @@ enum SettingsSection {
   theme,
   language,
   homePage,
+  sidebar,
   notifications,
   userPreferences,
   listPreferences,
@@ -35,6 +36,8 @@ extension SettingsSectionInfo on SettingsSection {
         return S.current.Language_settings;
       case SettingsSection.homePage:
         return S.current.Home_Page_Setting;
+      case SettingsSection.sidebar:
+        return S.current.Sidebar_Section_Profile;
       case SettingsSection.notifications:
         return S.current.Notification_Settings;
       case SettingsSection.userPreferences:
@@ -68,6 +71,8 @@ extension SettingsSectionInfo on SettingsSection {
         return S.current.Language_settings_desc_v2;
       case SettingsSection.homePage:
         return S.current.HomePageSettings_desc;
+      case SettingsSection.sidebar:
+        return S.current.Customize_Home_Page;
       case SettingsSection.notifications:
         return S.current.Settings_Notifications_Desc;
       case SettingsSection.userPreferences:
@@ -101,6 +106,8 @@ extension SettingsSectionInfo on SettingsSection {
         return Icons.translate;
       case SettingsSection.homePage:
         return Icons.dashboard_customize_outlined;
+      case SettingsSection.sidebar:
+        return Icons.view_sidebar_outlined;
       case SettingsSection.notifications:
         return Icons.notifications_outlined;
       case SettingsSection.userPreferences:

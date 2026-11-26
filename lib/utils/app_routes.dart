@@ -25,6 +25,7 @@ import 'package:mywatchlist/screens/settings/language_settings.dart';
 import 'package:mywatchlist/screens/settings/list_prefs_settings.dart';
 import 'package:mywatchlist/screens/settings/mal_home_settings.dart';
 import 'package:mywatchlist/screens/settings/notifications_settings.dart';
+import 'package:mywatchlist/screens/settings/prefs/sidebar_editor.dart';
 import 'package:mywatchlist/screens/settings/settings_page.dart';
 import 'package:mywatchlist/screens/settings/storage_settings.dart';
 import 'package:mywatchlist/screens/settings/theme_settings.dart';
@@ -79,6 +80,8 @@ abstract final class AppRoutes {
         return const LanguageSettings();
       case SettingsSection.homePage:
         return const HomeSettingsPage();
+      case SettingsSection.sidebar:
+        return const SidebarEditorPage();
       case SettingsSection.notifications:
         return const NotificationSettingsPage();
       case SettingsSection.userPreferences:

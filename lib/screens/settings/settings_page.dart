@@ -20,7 +20,12 @@ const List<(String Function(), List<SettingsSection>)> _groups = [
   (_accountTitle, [SettingsSection.accounts]),
   (
     _appearanceTitle,
-    [SettingsSection.theme, SettingsSection.language, SettingsSection.homePage],
+    [
+      SettingsSection.theme,
+      SettingsSection.language,
+      SettingsSection.homePage,
+      SettingsSection.sidebar,
+    ],
   ),
   (
     _contentTitle,

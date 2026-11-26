@@ -152,22 +152,73 @@ class EntryPill extends StatelessWidget {
   }
 }
 
-/// The entry's list status as a coloured pill.
+/// The entry's list status as a coloured pill. When [includeRewatch] is true
+/// and the entry is completed with `timesRewatched > 0`, merges the replay
+/// counter (`Completed ↻ ×N`) into the same pill.
 class StatusPill extends StatelessWidget {
   final ListEntryView entry;
-  const StatusPill({super.key, required this.entry});
+  final bool includeRewatch;
+  const StatusPill({super.key, required this.entry, this.includeRewatch = false});
 
   @override
   Widget build(BuildContext context) {
     final status = entry.status;
     if (status == null) return const SizedBox.shrink();
-    return EntryPill(
-      label: entry.repeating
-          ? (entry.isAnime ? S.current.Edit_Rewatching : S.current.Edit_Rereading)
-          : ListEntryLookScope.of(context).statusLabel(status, isAnime: entry.isAnime),
-      icon: entry.repeating ? Icons.replay_rounded : null,
-      background: status.colors(context).container,
-      foreground: status.colors(context).onContainer,
+    final role = status.colors(context);
+    final label = entry.repeating
+        ? (entry.isAnime ? S.current.Edit_Rewatching : S.current.Edit_Rereading)
+        : ListEntryLookScope.of(context).statusLabel(status, isAnime: entry.isAnime);
+    final mergeRewatch = includeRewatch &&
+        !entry.repeating &&
+        status == ListEntryStatus.completed &&
+        entry.timesRewatched > 0;
+    if (!mergeRewatch) {
+      return EntryPill(
+        label: label,
+        icon: entry.repeating ? Icons.replay_rounded : null,
+        background: role.container,
+        foreground: role.onContainer,
+      );
+    }
+    final count = entry.timesRewatched;
+    final rewatchText = entry.isAnime
+        ? S.current.Ltf_Rewatched(count)
+        : S.current.Ltf_Reread(count);
+    final textStyle = TextStyle(
+      fontSize: 10.5,
+      height: 1.2,
+      fontWeight: FontWeight.w600,
+      color: role.onContainer,
+    );
+    return Semantics(
+      label: '$label, $rewatchText',
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: role.container,
+          borderRadius: const BorderRadius.all(Radius.circular(6)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyle,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.replay_rounded, size: 11, color: role.onContainer),
+              const SizedBox(width: 2),
+              Text('×$count', style: textStyle),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -11,6 +11,17 @@ import 'package:mywatchlist/widgets/user/profile/profile_header.dart' show timeZ
 import 'package:mywatchlist/widgets/user/profile/profile_states.dart';
 import 'package:mwl_commons/mwl_commons.dart' show UserAboutHtml;
 
+/// Preserves newlines in plain-text profile About bios (which lack `<br>` /
+/// block HTML tags) so line breaks render properly in [HtmlWidget].
+String formatAboutHtml(String raw) {
+  final hasBlockHtml = RegExp(
+    r'<\s*(?:br|p|div|li|ul|ol|table|tr|td|h[1-6]|blockquote|pre|hr)\b',
+    caseSensitive: false,
+  ).hasMatch(raw);
+  if (hasBlockHtml) return raw;
+  return raw.replaceAll('\r\n', '\n').replaceAll('\n', '<br>');
+}
+
 /// The "about me" text of a profile. MAL serves it as HTML; links open through [openLink]
 /// and pictures through [AppImage]. When the profile came from MAL's page, [fromPage] holds
 /// the text already read there and no request is made; otherwise the mwl-api route answers.
@@ -64,7 +75,7 @@ class AboutSection extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: HtmlWidget(
-              about!.about!,
+              formatAboutHtml(about!.about!),
               textStyle: Theme.of(context).textTheme.bodyMedium,
               onTapUrl: (url) {
                 openLink(context, url);

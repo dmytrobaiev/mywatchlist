@@ -111,9 +111,13 @@ void main() {
 
     await tester.tap(find.byTooltip(S.current.Mlp_Compare));
     await tester.pumpAndSettle();
-    expect(find.text(S.current.Mlp_Count(S.current.Mlp_Common, 1)), findsOneWidget);
-    expect(find.text(S.current.Mlp_Count(S.current.Mlp_Missing, 2)), findsOneWidget);
-    await tester.tap(find.text(S.current.Mlp_Count(S.current.Mlp_Common, 1)));
+    final commonTile = find.widgetWithText(ListTile, S.current.Mlp_Common);
+    final missingTile = find.widgetWithText(ListTile, S.current.Mlp_Missing);
+    expect(commonTile, findsOneWidget);
+    expect(missingTile, findsOneWidget);
+    expect(find.descendant(of: commonTile, matching: find.text('1')), findsOneWidget);
+    expect(find.descendant(of: missingTile, matching: find.text('2')), findsOneWidget);
+    await tester.tap(commonTile);
     await tester.pumpAndSettle();
     expect(find.text('Dandadan'), findsWidgets);
     expect(find.text('Frieren'), findsNothing);

@@ -15,3 +15,4 @@ export 'notification_preferences.dart';
 export 'preferences_bloc.dart';
 export 'preferences_event.dart';
 export 'preferences_store.dart';
+export 'sidebar_preferences.dart';

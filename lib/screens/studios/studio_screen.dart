@@ -122,6 +122,8 @@ class _StudioScreenState extends State<StudioScreen> {
                 SliverAppBar(
                   pinned: true,
                   expandedHeight: _headerHeight(context),
+                  iconTheme: _collapsed ? null : const IconThemeData(color: Colors.white),
+                  actionsIconTheme: _collapsed ? null : const IconThemeData(color: Colors.white),
                   // The name shows once the logo has scrolled away.
                   title: AnimatedOpacity(
                     opacity: _collapsed ? 1 : 0,
@@ -352,7 +354,7 @@ class _Header extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x99000000), Color(0x00000000)],
+                  colors: [Color(0xB8000000), Color(0x00000000)],
                 ),
               ),
             ),

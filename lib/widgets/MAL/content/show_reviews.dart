@@ -79,13 +79,14 @@ class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepA
     if (position.pixels >= position.maxScrollExtent - _loadMoreDistance) _feed.loadMore();
   }
 
-  List<AnimeReview> _filtered() =>
-      filterReviews(_feed.reviews, sort: _filters.sort, score: _filters.score, tags: _filters.tags);
+  List<AnimeReview> _filtered() => _feed.reviews;
 
-  void _setFilters(ReviewFilters filters) => setState(() {
-        _filters = filters;
-        _visible = _filtered();
-      });
+  void _setFilters(ReviewFilters filters) {
+    setState(() {
+      _filters = filters;
+    });
+    _feed.setQuery(sort: filters.sort, tags: filters.tags);
+  }
 
   void _showReview(int index) {
     showReviewPager(
@@ -106,6 +107,7 @@ class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepA
     super.build(context);
     final reviews = _feed.reviews;
     final hasContent = reviews.isNotEmpty;
+    final showControls = hasContent || _feed.everLoaded || _filters.narrowed || _filters.sort != ReviewSort.helpful;
     final Widget body;
     if (_feed.loading && !hasContent) {
       body = SizedBox(height: _listHeight, child: _buildLoadingState());
@@ -116,7 +118,7 @@ class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepA
         onRetry: () => _feed.start(reset: true),
       );
     } else if (_visible.isEmpty) {
-      body = SizedBox(height: 200, child: _buildEmptyState(filtered: hasContent));
+      body = SizedBox(height: 200, child: _buildEmptyState(filtered: _filters.narrowed));
     } else {
       body = SizedBox(height: _listHeight, child: _buildReviewList());
     }
@@ -128,14 +130,14 @@ class _ShowAnimeReviewsState extends State<ShowAnimeReviews> with AutomaticKeepA
             category: widget.category,
             texts: reviewTextsForSummary(reviews),
           ),
-        if (hasContent)
+        if (showControls)
           ReviewFilterBar(
             filters: _filters,
             distribution: _feed.distribution,
             tags: _feed.tags,
             onChanged: _setFilters,
           ),
-        if (hasContent) const SizedBox(height: 12),
+        if (showControls) const SizedBox(height: 12),
         body,
       ],
     );

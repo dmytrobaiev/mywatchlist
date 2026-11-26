@@ -34,16 +34,19 @@ void main() {
       expect(filterReviews(reviews, sort: ReviewSort.oldest).map((r) => r.user!.username), ['d', 'c', 'b', 'a']);
     });
 
-    test('sorts by score (unscored last)', () {
-      expect(filterReviews(reviews, sort: ReviewSort.highest).first.score, 9);
-      expect(filterReviews(reviews, sort: ReviewSort.lowest).first.score, 5);
-      expect(filterReviews(reviews, sort: ReviewSort.lowest).last.score, isNull);
+    test('filters by any selected tag', () {
+      expect(filterReviews(reviews, tags: {'Mixed Feelings', 'Other'}).map((r) => r.user!.username), ['b']);
+      expect(filterReviews(reviews, tags: {'Recommended'}).map((r) => r.user!.username), ['a']);
     });
 
-    test('filters by score and by any selected tag', () {
-      expect(filterReviews(reviews, score: 9).map((r) => r.user!.username), ['a', 'c']);
-      expect(filterReviews(reviews, tags: {'Mixed Feelings', 'Other'}).map((r) => r.user!.username), ['b']);
-      expect(filterReviews(reviews, score: 9, tags: {'Mixed Feelings'}), isEmpty);
+    test('maps ReviewSort and tags into MAL server-side query params', () {
+      expect(ReviewSort.helpful.malParam, 'mostvoted');
+      expect(ReviewSort.newest.malParam, 'newest');
+      expect(ReviewSort.oldest.malParam, 'oldest');
+      final q = malReviewQueryForTags({'Funny', 'Recommended', 'Preliminary', 'Spoiler'});
+      expect(q.filterCheck, '1,6');
+      expect(q.preliminary, 'on');
+      expect(q.spoiler, 'on');
     });
   });
 

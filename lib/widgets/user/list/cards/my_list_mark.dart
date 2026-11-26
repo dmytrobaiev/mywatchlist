@@ -14,6 +14,7 @@ class MyListMark extends StatelessWidget {
     required this.category,
     this.dense = false,
     this.onImage = false,
+    this.inline = false,
     this.cache,
   });
 
@@ -27,6 +28,10 @@ class MyListMark extends StatelessWidget {
 
   /// Drawn over a cover: a thin outline keeps it apart from the picture.
   final bool onImage;
+
+  /// Minimal inline form without a filled pill background (used on the watch
+  /// progress row of Comfortable & Spacious other-user cards).
+  final bool inline;
 
   /// The user's statuses (tests give their own).
   final ListStatusCache? cache;
@@ -45,6 +50,31 @@ class MyListMark extends StatelessWidget {
         final s = S.of(context);
         final full = value.fullLabel ?? label;
         final theme = Theme.of(context);
+        if (inline) {
+          final style = theme.textTheme.labelMedium?.copyWith(
+            color: role.color,
+            fontWeight: FontWeight.w600,
+          );
+          return Semantics(
+            label: entry.score > 0 ? s.Mlp_Mine_Score(full, entry.score) : s.Mlp_Mine(full),
+            excludeSemantics: true,
+            child: Row(
+              key: ValueKey('my-list-$category-$id'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.person_rounded, size: 14, color: role.color),
+                const SizedBox(width: 3),
+                Text(label, style: style),
+                if (entry.score > 0) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.star_rounded, size: 13, color: role.color),
+                  const SizedBox(width: 1),
+                  Text('${entry.score}', style: style),
+                ],
+              ],
+            ),
+          );
+        }
         final style = theme.textTheme.labelSmall?.copyWith(
           color: role.onContainer,
           fontWeight: FontWeight.w700,

@@ -136,8 +136,9 @@ class _PagedProfileTabState<T> extends State<_PagedProfileTab<T>>
 /// opens the review in the same pager the title pages use.
 class ReviewsSection extends StatelessWidget {
   final String username;
+  final String? pictureUrl;
 
-  const ReviewsSection({super.key, required this.username});
+  const ReviewsSection({super.key, required this.username, this.pictureUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +151,9 @@ class ReviewsSection extends StatelessWidget {
         review: items[i],
         onTap: () => showReviewPager(
           context,
-          reviews: [for (final r in items) r.toAnimeReview(username)],
+          reviews: [
+            for (final r in items) r.toAnimeReview(username, pictureUrl: pictureUrl),
+          ],
           initialIndex: i,
           category: items[i].media.category,
         ),
@@ -161,8 +164,13 @@ class ReviewsSection extends StatelessWidget {
 
 extension ProfileReviewToJikan on ProfileReview {
   /// The review in the shape the review pager reads, with the profile's owner as reviewer.
-  AnimeReview toAnimeReview(String username) => AnimeReview(
-        user: User(username: username),
+  AnimeReview toAnimeReview(String username, {String? pictureUrl}) => AnimeReview(
+        user: User(
+          username: username,
+          images: (pictureUrl != null && pictureUrl.isNotEmpty)
+              ? Images(jpg: ImageFormat(imageUrl: pictureUrl))
+              : null,
+        ),
         malId: id,
         url: url,
         type: media.category,

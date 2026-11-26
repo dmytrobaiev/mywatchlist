@@ -29,6 +29,7 @@ import 'package:mywatchlist/widgets/MAL/content/media_platforms.dart' show Sched
 import 'package:mywatchlist/widgets/MAL/content/synopsis_widget.dart';
 import 'package:mywatchlist/widgets/common/slivers.dart';
 import 'package:mywatchlist/widgets/loading/shimmercolor.dart';
+import 'package:mywatchlist/widgets/user/contenteditwidget.dart' show QuickEditModalSheet;
 import 'package:scroll_to_index/scroll_to_index.dart';
 
 /// Anime / manga detail page (MyAnimeList data): collapsing header, tab bar
@@ -119,6 +120,7 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
   @override
   void dispose() {
     _scroll.removeListener(_onScroll);
+    _tabController.removeListener(_onTabControllerChange);
     _tabPrefSub?.cancel();
     _titlePrefSub?.cancel();
     _scroll.dispose();
@@ -254,49 +256,38 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
         vsync: this,
         initialIndex: selected == null ? 0 : math.max(0, tabs.indexOf(selected)),
       );
+      _tabController.addListener(_onTabControllerChange);
       _tabTypes = tabs;
-      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        old.removeListener(_onTabControllerChange);
+        old.dispose();
+      });
     }
     for (final type in tabs) {
       _sectionKeys.putIfAbsent(type, () => GlobalKey(debugLabel: type.name));
     }
+    _syncAppBarTitle();
     setState(() => _sections = sections);
   }
 
-  bool _shouldShowAppBarTitle(ScrollPosition position) {
-    final countdown = contentPref(context, (c) => c.showCountdownOnDetail);
-    final expanded = DetailHeader.extentFor(
-      _data,
-      topInset: MediaQuery.paddingOf(context).top,
-      countdown: countdown,
-    );
-    final collapseOffset = (expanded - _pinnedExtent).clamp(0.0, double.infinity);
-    // Never show while the cover header itself is still partially visible.
-    if (position.pixels < collapseOffset) return false;
+  void _onTabControllerChange() => _syncAppBarTitle();
 
-    // Show starting from the Media section (or the first section after Synopsis).
-    TabType? trigger;
-    if (_tabTypes.contains(TabType.Media)) {
-      trigger = TabType.Media;
-    } else if (_tabTypes.length > 1) {
-      trigger = _tabTypes[1];
+  /// Shows the AppBar title when the navbar snaps to [TabType.Media] (or any
+  /// section at or after it; falls back to the second tab when Media is hidden).
+  void _syncAppBarTitle([int? tabIndex]) {
+    if (_tabTypes.isEmpty) {
+      if (_showAppBarTitle.value) _showAppBarTitle.value = false;
+      return;
     }
-    if (trigger == null) return true;
-
-    final box = _sectionKeys[trigger]?.currentContext?.findRenderObject() as RenderBox?;
-    if (box != null && box.attached && box.hasSize) {
-      final mediaTop = box.localToGlobal(Offset.zero).dy;
-      return mediaTop <= _pinnedExtent + 24;
-    }
-    // If Media is off-screen above (already scrolled past), keep title visible;
-    // if still below the viewport inside Synopsis, keep it hidden.
-    return _tabController.index >= _tabTypes.indexOf(trigger);
+    final idx = tabIndex ?? _tabController.index;
+    final mediaIdx = _tabTypes.indexOf(TabType.Media);
+    final triggerIdx = mediaIdx >= 0 ? mediaIdx : 1;
+    final show = _tabTypes.length > triggerIdx && idx >= triggerIdx;
+    if (_showAppBarTitle.value != show) _showAppBarTitle.value = show;
   }
 
   void _onScroll() {
     final position = _scroll.position;
-    final showTitle = _shouldShowAppBarTitle(position);
-    if (_showAppBarTitle.value != showTitle) _showAppBarTitle.value = showTitle;
 
     // Tab sync: at most once per frame, after a real move, never while a tab
     // tap is scrolling to its section.
@@ -311,26 +302,36 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
       if (index != null && index != _tabController.index) {
         _tabController.index = index;
       }
+      _syncAppBarTitle();
     });
   }
 
-  /// Tab whose section crosses the vertical middle of the list, or null.
-  /// Only built (on-screen or cached) sections have a render box.
+  /// Tab whose section crosses the upper-middle probe line below the pinned
+  /// bar (falling back to the closest visible section), or null.
   int? _centerTabIndex() {
     final listBox = _listKey.currentContext?.findRenderObject() as RenderBox?;
     if (listBox == null || !listBox.hasSize) return null;
     final top = listBox.localToGlobal(Offset.zero).dy;
     final bottom = top + listBox.size.height;
-    final center = top + listBox.size.height / 2;
+    final visibleTop = math.max(top, _pinnedExtent);
+    final probe = visibleTop + math.max(0.0, (bottom - visibleTop) * 0.35);
+    int? bestIndex;
+    var bestDistance = double.infinity;
     for (var i = 0; i < _tabTypes.length; i++) {
       final box = _sectionKeys[_tabTypes[i]]?.currentContext?.findRenderObject()
           as RenderBox?;
       if (box == null || !box.attached || !box.hasSize) continue;
       final itemTop = box.localToGlobal(Offset.zero).dy;
+      final itemBottom = itemTop + box.size.height;
       if (itemTop > bottom) break;
-      if (itemTop <= center && itemTop + box.size.height >= center) return i;
+      if (itemTop <= probe && itemBottom >= probe) return i;
+      final dist = itemBottom < probe ? probe - itemBottom : itemTop - probe;
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestIndex = i;
+      }
     }
-    return null;
+    return bestIndex;
   }
 
   // ---- Build -------------------------------------------------------------
@@ -342,6 +343,7 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
   /// the viewport, which is impossible while the header is expanded, so the
   /// page did not move.
   Future<void> _scrollToTab(int index) async {
+    _syncAppBarTitle(index);
     await _scroll.scrollToIndex(index, preferPosition: AutoScrollPosition.begin);
     // The tapped tab stays selected until the user scrolls again.
     if (!mounted || !_scroll.hasClients) return;
@@ -349,6 +351,7 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     if (_tabController.index != index && index < _tabController.length) {
       _tabController.index = index;
     }
+    _syncAppBarTitle(index);
   }
 
   @override
@@ -389,22 +392,29 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        showDragHandle: true,
-        builder: (sheetContext) => DetailEditPanel(
-          data: _data,
-          showCrossTracker: _crossTrackerEnabled && _hasOtherTrackers,
-          live: _liveStatus,
-          onUpdate: (success) {
-            if (success) _loadMal();
-          },
-          onLiveStatus: (live) {
-            if (mounted) setState(() => _liveStatus = live);
-          },
-          onDelete: () {
-            Navigator.of(sheetContext).pop();
-            if (mounted) _loadMal();
-          },
-          onClose: () => Navigator.of(sheetContext).pop(),
+        showDragHandle: false,
+        builder: (sheetContext) => QuickEditModalSheet(
+          builder: (context, scrollController, expanded, onExpandedChanged) =>
+              DetailEditPanel(
+            data: _data,
+            showCrossTracker: _crossTrackerEnabled && _hasOtherTrackers,
+            live: _liveStatus,
+            scrollController: scrollController,
+            enableSwipe: false,
+            expanded: expanded,
+            onExpandedChanged: onExpandedChanged,
+            onUpdate: (success) {
+              if (success) _loadMal();
+            },
+            onLiveStatus: (live) {
+              if (mounted) setState(() => _liveStatus = live);
+            },
+            onDelete: () {
+              Navigator.of(sheetContext).pop();
+              if (mounted) _loadMal();
+            },
+            onClose: () => Navigator.of(sheetContext).pop(),
+          ),
         ),
       );
     } finally {
@@ -417,8 +427,6 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     final countdown = contentPref(context, (c) => c.showCountdownOnDetail);
     return SliverAppBar(
       pinned: true,
-      backgroundColor: theme.colorScheme.surface,
-      surfaceTintColor: Colors.transparent,
       expandedHeight: DetailHeader.extentFor(
         _data,
         topInset: MediaQuery.paddingOf(context).top,
@@ -435,7 +443,7 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
         child: Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
+        collapseMode: CollapseMode.pin,
         background: ShimmerConditionally(
           showShimmer: _data.state == DetailLoadState.loading,
           baseColor: theme.scaffoldBackgroundColor,

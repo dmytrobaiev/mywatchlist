@@ -230,17 +230,36 @@ class HandlerCore {
 
   /// Reviews (HTML scraping), parsed into `ReviewHtml` items.
   ///
-  /// With `id`: reviews of that anime/manga, most voted first; without:
+  /// With `id`: reviews of that anime/manga using MAL's native `sort`,
+  /// `filter_check`, `preliminary`, and `spoiler` parameters; without:
   /// MAL's latest reviews of the `category`.
   Future<Map<String, dynamic>> _handleReviews(
       PathMatcher path, Uri uri, Map<String, String> params) async {
     final id = queryParams<int>(uri, 'id');
     final category = _category(uri);
     final page = queryParams<int>(uri, 'page', 1)!;
+    final rawSort = queryParams<String>(uri, 'sort', 'mostvoted')!;
+    const allowedSorts = {'mostvoted', 'newest', 'oldest', 'suggested'};
+    final sort = allowedSorts.contains(rawSort) ? rawSort : 'mostvoted';
+    final filterCheck = queryParams<String>(uri, 'filter_check');
+    final preliminary = queryParams<String>(uri, 'preliminary');
+    final spoiler = queryParams<String>(uri, 'spoiler');
 
-    final url = id != null
-        ? '${Constants.malBaseUrl}/$category/$id/_/reviews?sort=mostvoted&p=$page'
-        : '${Constants.malBaseUrl}/reviews.php?t=$category&p=$page';
+    final String url;
+    if (id != null) {
+      final qp = <String, String>{
+        'sort': sort,
+        'p': '$page',
+        if (filterCheck != null && filterCheck.isNotEmpty) 'filter_check': filterCheck,
+        if (preliminary != null && preliminary.isNotEmpty) 'preliminary': preliminary,
+        if (spoiler != null && spoiler.isNotEmpty) 'spoiler': spoiler,
+      };
+      url = Uri.parse('${Constants.malBaseUrl}/$category/$id/_/reviews')
+          .replace(queryParameters: qp)
+          .toString();
+    } else {
+      url = '${Constants.malBaseUrl}/reviews.php?t=$category&p=$page';
+    }
 
     final result = await HttpConnect.htmlPage(url, PageParsers.getReviews);
     return {'url': uri.path, 'data': result, 'fromCache': false};

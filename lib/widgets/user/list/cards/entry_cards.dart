@@ -131,11 +131,15 @@ class EntryListTile extends StatelessWidget {
     final coverW = spacious ? 112.0 : 84.0;
     final coverH = spacious ? 160.0 : 120.0;
     final airing = style.showAiringInfo || spacious ? airingText(entry, now, locale) : null;
+    final mergeRewatch = style.showStatus &&
+        !entry.repeating &&
+        entry.status == ListEntryStatus.completed &&
+        entry.timesRewatched > 0;
     final badges = <Widget>[
-      if (style.showStatus) StatusPill(entry: entry),
-      if (mark != null) mark!,
+      if (style.showStatus) StatusPill(entry: entry, includeRewatch: mergeRewatch),
       if (style.showPriority && entry.priority > 0) PriorityPill(priority: entry.priority),
-      if (entry.timesRewatched > 0) RewatchPill(entry: entry),
+      if (entry.timesRewatched > 0 && !mergeRewatch)
+        RewatchPill(entry: entry, short: style.showStatus),
       MeanScore(entry: entry, showMembers: spacious),
       EntryCardBadges(entry: entry),
     ];
@@ -190,6 +194,10 @@ class EntryListTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.labelMedium),
                     ),
+                    if (mark != null) ...[
+                      const SizedBox(width: 8),
+                      mark!,
+                    ],
                     EntryStepper(entry: entry, actions: actions),
                   ],
                 ),
@@ -623,7 +631,16 @@ class GridCardBar extends StatelessWidget {
               Expanded(
                 child: Align(
                   alignment: AlignmentDirectional.centerStart,
-                  child: MeanScore(entry: entry, fontSize: 11.5, dashWhenUnknown: true),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: MeanScore(
+                      entry: entry,
+                      fontSize: 11.5,
+                      showMembers: true,
+                      dashWhenUnknown: true,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 5),

@@ -8,7 +8,7 @@ enum EditSwipe { none, expand, collapse, dismiss }
 const double editSwipeDistance = 40;
 const double editSwipeSpeed = 500;
 
-/// Decides what a finished vertical drag does (MoeList-like): up expands
+/// Decides what a finished vertical drag does: up expands
 /// "More options"; down collapses them, or closes the sheet when they are
 /// already collapsed. [dy] is the total move, [velocity] the release speed;
 /// both are negative upwards.

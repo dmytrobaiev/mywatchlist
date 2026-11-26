@@ -231,9 +231,8 @@ class _AccountAvatar extends StatelessWidget {
                   PositionedDirectional(
                     end: -2,
                     bottom: -2,
-                    child: ExcludeSemantics(
-                      child: GestureDetector(
-                        onTap: openSwitcher,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: scheme.surfaceContainerHighest,

@@ -155,42 +155,45 @@ class ReviewDetailPage extends StatelessWidget {
               ),
             ),
           ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
+          SafeArea(
+            top: false,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                ),
               ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (date.isNotEmpty)
-                    Text(
-                      date,
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  if (progress != null)
-                    Flexible(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.visibility_outlined, size: 16, color: theme.colorScheme.onSurfaceVariant),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              category == 'manga'
-                                  ? S.current.Social_Review_Chapters_Read(progress)
-                                  : S.current.Social_Review_Episodes_Watched(progress),
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                            ),
-                          ),
-                        ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (date.isNotEmpty)
+                      Text(
+                        date,
+                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                       ),
-                    ),
-                ],
+                    if (progress != null)
+                      Flexible(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.visibility_outlined, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                category == 'manga'
+                                    ? S.current.Social_Review_Chapters_Read(progress)
+                                    : S.current.Social_Review_Episodes_Watched(progress),
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

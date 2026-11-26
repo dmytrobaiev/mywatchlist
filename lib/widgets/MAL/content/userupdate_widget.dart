@@ -25,6 +25,9 @@ class UserUpdatesPage extends StatefulWidget {
   final VoidCallback? onPageChange;
   final String category;
   final double horizPadding;
+  final int? totalEpisodes;
+  final int? totalChapters;
+  final int? totalVolumes;
 
   const UserUpdatesPage({
     super.key,
@@ -32,6 +35,9 @@ class UserUpdatesPage extends StatefulWidget {
     required this.category,
     this.onPageChange,
     required this.horizPadding,
+    this.totalEpisodes,
+    this.totalChapters,
+    this.totalVolumes,
   });
 
   @override
@@ -79,8 +85,14 @@ class _UserUpdatesPageState extends State<UserUpdatesPage> with AutomaticKeepAli
     );
   }
 
-  Widget _grid(List<AnimeUserUpdate?> users) =>
-      UserUpdatesGrid(updates: users, category: widget.category, horizPadding: widget.horizPadding);
+  Widget _grid(List<AnimeUserUpdate?> users) => UserUpdatesGrid(
+        updates: users,
+        category: widget.category,
+        horizPadding: widget.horizPadding,
+        totalEpisodes: widget.totalEpisodes,
+        totalChapters: widget.totalChapters,
+        totalVolumes: widget.totalVolumes,
+      );
 }
 
 /// The two-row horizontal grid of update cards; `null` entries show a skeleton card.
@@ -89,8 +101,19 @@ class UserUpdatesGrid extends StatelessWidget {
   final List<AnimeUserUpdate?> updates;
   final String category;
   final double horizPadding;
+  final int? totalEpisodes;
+  final int? totalChapters;
+  final int? totalVolumes;
 
-  const UserUpdatesGrid({super.key, required this.updates, required this.category, required this.horizPadding});
+  const UserUpdatesGrid({
+    super.key,
+    required this.updates,
+    required this.category,
+    required this.horizPadding,
+    this.totalEpisodes,
+    this.totalChapters,
+    this.totalVolumes,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +136,15 @@ class UserUpdatesGrid extends StatelessWidget {
             child: SizedBox(
               width: 120,
               child: Card(
-                child: update == null ? const SizedBox() : _UpdateCard(update: update, category: category),
+                child: update == null
+                    ? const SizedBox()
+                    : _UpdateCard(
+                        update: update,
+                        category: category,
+                        totalEpisodes: totalEpisodes,
+                        totalChapters: totalChapters,
+                        totalVolumes: totalVolumes,
+                      ),
               ),
             ),
           );
@@ -126,8 +157,17 @@ class UserUpdatesGrid extends StatelessWidget {
 class _UpdateCard extends StatelessWidget {
   final AnimeUserUpdate update;
   final String category;
+  final int? totalEpisodes;
+  final int? totalChapters;
+  final int? totalVolumes;
 
-  const _UpdateCard({required this.update, required this.category});
+  const _UpdateCard({
+    required this.update,
+    required this.category,
+    this.totalEpisodes,
+    this.totalChapters,
+    this.totalVolumes,
+  });
 
   static String? _formatUpdateTime(String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
@@ -246,8 +286,10 @@ class _UpdateCard extends StatelessWidget {
       (done == null || total == null || total == 0) ? 0.0 : (done / total).clamp(0.0, 1.0);
 
   Widget _episodeProgress(BuildContext context) {
-    final seen = update.episodesSeen;
-    final total = update.episodesTotal;
+    final total = (update.episodesTotal != null && update.episodesTotal! > 0)
+        ? update.episodesTotal
+        : (totalEpisodes != null && totalEpisodes! > 0 ? totalEpisodes : null);
+    final seen = update.episodesSeen ?? (update.status != null || total != null ? 0 : null);
     return Column(
       children: [
         _ring(context, size: 45, label: '${seen ?? "-"}/${total ?? "-"}', value: _ratio(seen, total)),
@@ -258,8 +300,14 @@ class _UpdateCard extends StatelessWidget {
   }
 
   Widget _mangaProgress(BuildContext context) {
-    final read = update.chaptersRead;
-    final total = update.chaptersTotal;
+    final total = (update.chaptersTotal != null && update.chaptersTotal! > 0)
+        ? update.chaptersTotal
+        : (totalChapters != null && totalChapters! > 0 ? totalChapters : null);
+    final read = update.chaptersRead ?? (update.status != null || total != null ? 0 : null);
+    final volTotal = (update.volumesTotal != null && update.volumesTotal! > 0)
+        ? update.volumesTotal
+        : (totalVolumes != null && totalVolumes! > 0 ? totalVolumes : null);
+    final volRead = update.volumesRead ?? (update.status != null || volTotal != null ? 0 : null);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -268,7 +316,7 @@ class _UpdateCard extends StatelessWidget {
         Text(S.current.Social_Updates_Chapters_Short, style: const TextStyle(fontSize: 10)),
         const SizedBox(height: 1),
         Text(
-          S.current.Social_Updates_Volumes('${update.volumesRead ?? "-"}', '${update.volumesTotal ?? "-"}'),
+          S.current.Social_Updates_Volumes('${volRead ?? "-"}', '${volTotal ?? "-"}'),
           style: const TextStyle(fontSize: 9),
           overflow: TextOverflow.ellipsis,
         ),

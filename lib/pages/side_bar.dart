@@ -8,6 +8,7 @@ import 'package:mywatchlist/screens/user_profile/user_profile_view.dart' show Us
 import 'package:mywatchlist/services/api/MAL/mal_api.dart';
 import 'package:mywatchlist/user/accounts/account_bloc.dart';
 import 'package:mywatchlist/user/base_user.dart' show AuthStatus;
+import 'package:mywatchlist/user/preferences/preferences.dart';
 import 'package:mywatchlist/user/user_manager.dart';
 import 'package:mywatchlist/utils/app_routes.dart';
 import 'package:mywatchlist/utils/sidebar_bg_manager.dart';
@@ -129,46 +130,89 @@ class _AppSidebarState extends State<AppSidebar> {
     accountBloc.add(RemoveAccountEvent(tracker));
   }
 
-  void _showBackgroundOptions() {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final colors = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  S.current.Sidebar_Background_Title,
-                  style: Theme.of(sheetContext).textTheme.titleMedium,
-                ),
-              ),
-              ListTile(
-                leading: Icon(Icons.image_outlined, color: colors.primary),
-                title: Text(S.current.Sidebar_Background_Change),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickBackgroundImage();
-                },
-              ),
-              if (_backgroundImagePath != null)
-                ListTile(
-                  leading: Icon(Icons.delete_outline, color: colors.error),
-                  title: Text(S.current.Sidebar_Background_Remove),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _removeBackgroundImage();
-                  },
-                ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
+  List<SidebarItemPreference> _readSidebarItems(BuildContext context) {
+    try {
+      return context.select((PreferencesBloc b) => b.state.general.sidebarItems);
+    } on ProviderNotFoundException {
+      return Preferences.general.sidebarItems;
+    }
+  }
+
+  List<Widget> _buildMySpaceTiles(
+    BuildContext context, {
+    required AccountType tracker,
+    required bool signedIn,
+    required String? username,
+  }) {
+    final isMal = signedIn && tracker == AccountType.myanimelist;
+    final items = _readSidebarItems(context);
+    final tiles = <Widget>[];
+    if (signedIn && !isMal) {
+      tiles.add(_SidebarTile(
+        icon: Icons.person_outline,
+        title: S.current.Profile,
+        onTap: () => _go((host) => AppRoutes.openUserProfile(host,
+            tracker: tracker, username: username)),
+      ));
+    }
+    for (final pref in items) {
+      if (!pref.visible) continue;
+      switch (pref.item) {
+        case SidebarItem.stats:
+        case SidebarItem.about:
+        case SidebarItem.friends:
+        case SidebarItem.clubs:
+        case SidebarItem.favorites:
+        case SidebarItem.history:
+          if (!isMal) continue;
+          final tab = switch (pref.item) {
+            SidebarItem.stats => UserProfileTab.stats,
+            SidebarItem.about => UserProfileTab.about,
+            SidebarItem.friends => UserProfileTab.friends,
+            SidebarItem.clubs => UserProfileTab.clubs,
+            SidebarItem.favorites => UserProfileTab.favorites,
+            SidebarItem.history => UserProfileTab.history,
+            _ => UserProfileTab.stats,
+          };
+          tiles.add(_SidebarTile(
+            icon: pref.item.icon,
+            title: pref.item.label,
+            onTap: () => _go((host) =>
+                AppRoutes.openUserProfile(host, tracker: tracker, tab: tab)),
+          ));
+        case SidebarItem.bookmarks:
+          tiles.add(_SidebarTile(
+            icon: Icons.bookmark_outline,
+            title: S.current.Bookmarks,
+            onTap: () => _go(AppRoutes.openBookmarks),
+          ));
+        case SidebarItem.calendar:
+          tiles.add(_SidebarTile(
+            icon: Icons.calendar_month_outlined,
+            title: S.current.AnimeCalendar,
+            onTap: () => _go(AppRoutes.openCalendar),
+          ));
+        case SidebarItem.notifications:
+          if (!isMal) continue;
+          final item = malNotificationsSidebarItem(context);
+          tiles.add(_SidebarTile(
+            icon: item.icon,
+            title: item.title,
+            trailing: item.trailing,
+            onTap: () => _go((_) => item.onTap()),
+          ));
+        case SidebarItem.messages:
+          if (!isMal) continue;
+          final item = malMessagesSidebarItem(context);
+          tiles.add(_SidebarTile(
+            icon: item.icon,
+            title: item.title,
+            trailing: item.trailing,
+            onTap: () => _go((_) => item.onTap()),
+          ));
+      }
+    }
+    return tiles;
   }
 
   @override
@@ -200,45 +244,12 @@ class _AppSidebarState extends State<AppSidebar> {
                       _go((host) => AppRoutes.signInAgain(host, tracker)),
                 ),
               _GroupLabel(S.current.Sidebar_Section_Profile),
-              // High-frequency daily items first so they are reachable without scrolling.
-              if (signedIn && tracker == AccountType.myanimelist)
-                for (final item in [
-                  malNotificationsSidebarItem(context),
-                  malMessagesSidebarItem(context),
-                ])
-                  _SidebarTile(
-                    icon: item.icon,
-                    title: item.title,
-                    trailing: item.trailing,
-                    onTap: () => _go((_) => item.onTap()),
-                  ),
-              _SidebarTile(
-                icon: Icons.calendar_month_outlined,
-                title: S.current.AnimeCalendar,
-                onTap: () => _go(AppRoutes.openCalendar),
+              ..._buildMySpaceTiles(
+                context,
+                tracker: tracker,
+                signedIn: signedIn,
+                username: user?.username,
               ),
-              _SidebarTile(
-                icon: Icons.bookmark_outline,
-                title: S.current.Bookmarks,
-                onTap: () => _go(AppRoutes.openBookmarks),
-              ),
-              if (signedIn && tracker == AccountType.myanimelist)
-                // DailyAL's profile shortcuts, each opening the profile on its tab.
-                for (final (tab, icon, label) in _profileShortcuts())
-                  _SidebarTile(
-                    icon: icon,
-                    title: label,
-                    onTap: () => _go((host) =>
-                        AppRoutes.openUserProfile(host, tracker: tracker, tab: tab)),
-                  )
-              else if (signedIn)
-                // Other trackers have a single profile page.
-                _SidebarTile(
-                  icon: Icons.person_outline,
-                  title: S.current.Profile,
-                  onTap: () => _go((host) => AppRoutes.openUserProfile(host,
-                      tracker: tracker, username: user?.username)),
-                ),
               for (final item in widget.extraItems)
                 _SidebarTile(
                   icon: item.icon,
@@ -287,19 +298,6 @@ class _AppSidebarState extends State<AppSidebar> {
         },
       ),
     );
-  }
-
-  /// The profile tabs DailyAL's sidebar lists, in its order.
-  static List<(UserProfileTab, IconData, String)> _profileShortcuts() {
-    final s = S.current;
-    return [
-      (UserProfileTab.stats, Icons.stacked_bar_chart_rounded, s.Prof_Tab_Stats),
-      (UserProfileTab.about, Icons.info_outline, s.Prof_Tab_About),
-      (UserProfileTab.friends, Icons.people_alt_outlined, s.Prof_Tab_Friends),
-      (UserProfileTab.clubs, Icons.castle_outlined, s.Prof_Tab_Clubs),
-      (UserProfileTab.favorites, Icons.favorite_outline, s.Prof_Tab_Favorites),
-      (UserProfileTab.history, Icons.history_rounded, s.Prof_Tab_History),
-    ];
   }
 
   Widget _buildFooter(ThemeData theme) {
@@ -378,16 +376,29 @@ class _AppSidebarState extends State<AppSidebar> {
           PositionedDirectional(
             top: topInset + 8,
             end: 8,
-            child: IconButton.filledTonal(
-              tooltip: S.current.Sidebar_Background_Edit,
-              icon: _isLoadingImage
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.wallpaper, size: 20),
-              onPressed: _isLoadingImage ? null : _showBackgroundOptions,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (bgPath != null) ...[
+                  IconButton.filledTonal(
+                    tooltip: S.current.Sidebar_Background_Remove,
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: _isLoadingImage ? null : _removeBackgroundImage,
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                IconButton.filledTonal(
+                  tooltip: S.current.Sidebar_Background_Change,
+                  icon: _isLoadingImage
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.wallpaper, size: 20),
+                  onPressed: _isLoadingImage ? null : _pickBackgroundImage,
+                ),
+              ],
             ),
           ),
           PositionedDirectional(

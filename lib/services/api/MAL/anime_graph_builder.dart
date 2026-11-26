@@ -220,75 +220,43 @@ class _Walk {
   List<_Edge> unvisited(List<_Edge> list) =>
       [for (final e in list) if (!nodes.containsKey(e.target)) e];
 
-  final List<_Edge> _rawEdges = [];
-
-  /// `get_related_anime_with_graph`: separates node discovery from edge
-  /// retention so cross-edges between nodes in the same ring or pointing back
-  /// to already-discovered nodes are never dropped, while preserving root-walk
-  /// traversal order and stopping immediately on 429 rate limits.
+  /// `get_related_anime_with_graph`.
   Future<void> visit(int id, {required bool includeOthers}) async {
-    await _visitRec(id, includeOthers: includeOthers);
-
-    // Keep every valid edge whose endpoints are both in `nodes`, preserving
-    // first-seen direction from the root walk while deduplicating inverse pairs
-    // between `{u, v}` (upgrading a non-spine edge only when a `sequel` or
-    // `prequel` links the same pair).
-    final byPair = <(int, int), _Edge>{};
-    for (final e in _rawEdges) {
-      if (e.source == e.target) continue;
-      if (!nodes.containsKey(e.source) || !nodes.containsKey(e.target)) continue;
-      final pair = e.source < e.target ? (e.source, e.target) : (e.target, e.source);
-      final existing = byPair[pair];
-      if (existing == null || (!_isSpine(existing.relation) && _isSpine(e.relation))) {
-        byPair[pair] = e;
-      }
-    }
-    edges.addAll(byPair.values);
-  }
-
-  static bool _isSpine(String relation) =>
-      relation == 'sequel' || relation == 'prequel';
-
-  Future<void> _visitRec(int id, {required bool includeOthers}) async {
     final anime = await fetch(id);
     if (anime == null) return;
     addNode(anime);
 
-    final allEdges = edgesOf(id, anime, includeOthers: includeOthers);
-    _rawEdges.addAll(allEdges);
+    final ring = unvisited(edgesOf(id, anime, includeOthers: includeOthers));
 
-    final unvisitedEdges = unvisited(allEdges);
-    if (unvisitedEdges.isEmpty) return;
-
-    final seenTargets = <int>{};
-    final targetIds = <int>[
-      for (final e in unvisitedEdges)
-        if (seenTargets.add(e.target)) e.target,
-    ];
-    final fetched = List<Map<String, dynamic>?>.filled(targetIds.length, null);
+    // Neighbours fetched [concurrency] at a time; results kept in the ring's order so the
+    // graph does not depend on which answer came first.
+    final neighbours = List<Map<String, dynamic>?>.filled(ring.length, null);
     var next = 0;
     Future<void> worker() async {
-      while (next < targetIds.length) {
+      while (next < ring.length) {
         final i = next++;
-        fetched[i] = await fetch(targetIds[i]);
+        neighbours[i] = await fetch(ring[i].target);
       }
     }
 
-    await Future.wait([
-      for (var w = 0; w < builder.concurrency && w < targetIds.length; w++) worker(),
-    ]);
+    await Future.wait(
+        [for (var w = 0; w < builder.concurrency && w < ring.length; w++) worker()]);
 
-    final nextIds = <int>[];
-    for (var i = 0; i < targetIds.length; i++) {
-      final neighbour = fetched[i];
+    final combined = <_Edge>[];
+    for (var i = 0; i < ring.length; i++) {
+      final neighbour = neighbours[i];
       if (neighbour == null) continue;
-      addNode(neighbour);
-      nextIds.add(targetIds[i]);
+      combined
+          .addAll(edgesOf(ring[i].target, neighbour, includeOthers: false));
+    }
+    edges.addAll(ring);
+    for (final neighbour in neighbours) {
+      if (neighbour != null) addNode(neighbour);
     }
 
-    for (final nextId in nextIds) {
-      if (rateLimited) break;
-      await _visitRec(nextId, includeOthers: false);
+    for (final edge in unvisited(combined)) {
+      edges.add(edge);
+      await visit(edge.target, includeOthers: false);
     }
   }
 

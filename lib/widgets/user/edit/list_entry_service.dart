@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:html/parser.dart' as html_parser;
 import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
@@ -158,32 +159,24 @@ class MalListEntryService implements ListEntryService {
     );
   }
 
-  /// Clears start and/or finish date via MAL's `/ownlist/{anime|manga}/{id}/edit` form
-  /// (MAL API v2 strictly rejects empty date strings with HTTP 400).
-  Future<EntryUpdate> _clearDatesViaWeb(
-    int id, {
+  /// Extracts the MAL edit form action path and fields needed to clear start
+  /// and/or finish dates via MAL's `/ownlist/` web form (using MAL's blank /
+  /// "Unknown date" date inputs and `submitIt=1`).
+  @visibleForTesting
+  static ({String actionPath, Map<String, String> fields})? extractClearDateForm(
+    String html, {
     required bool isAnime,
     required bool clearStart,
     required bool clearFinish,
-    ListEntry? previous,
-  }) async {
-    final web = MalWebClient.instance;
-    await web.session.ensureLoaded();
-    if (!web.session.isConnected) {
-      throw const MalWebNoSession();
-    }
-    final kind = isAnime ? 'anime' : 'manga';
+    required String fallbackPath,
+  }) {
+    final doc = html_parser.parse(html);
+    final form = doc.querySelector('form#main-form') ??
+        doc.querySelector('form[action*="/ownlist/"]') ??
+        doc.querySelector('form[name="main_form"]') ??
+        doc.querySelector('form');
+    if (form == null) return null;
     final prefix = isAnime ? 'add_anime' : 'add_manga';
-    final editPath = '/ownlist/$kind/$id/edit';
-    final pageResp = await web.get(editPath);
-    if (pageResp.statusCode != 200) {
-      throw MalWebActionFailed(statusCode: pageResp.statusCode);
-    }
-    final doc = html_parser.parse(pageResp.body);
-    final form = doc.querySelector('form[name="main_form"]') ?? doc.querySelector('form');
-    if (form == null) {
-      throw const MalWebActionFailed(message: 'Edit form not found');
-    }
     final fields = <String, String>{};
     for (final input in form.querySelectorAll('input')) {
       final name = input.attributes['name'];
@@ -199,7 +192,8 @@ class MalListEntryService implements ListEntryService {
     for (final select in form.querySelectorAll('select')) {
       final name = select.attributes['name'];
       if (name == null || name.isEmpty) continue;
-      final selected = select.querySelector('option[selected]');
+      final selected =
+          select.querySelector('option[selected]') ?? select.querySelector('option');
       fields[name] = selected?.attributes['value'] ?? '';
     }
     for (final textarea in form.querySelectorAll('textarea')) {
@@ -207,43 +201,83 @@ class MalListEntryService implements ListEntryService {
       if (name == null || name.isEmpty) continue;
       fields[name] = textarea.text;
     }
-    if (clearStart) {
-      fields['$prefix[start_date][year]'] = '';
-      fields['$prefix[start_date][month]'] = '';
-      fields['$prefix[start_date][day]'] = '';
+    void clearDateFields(String key) {
+      fields['$prefix[$key][year]'] = '';
+      fields['$prefix[$key][month]'] = '';
+      fields['$prefix[$key][day]'] = '';
+      for (final input in form.querySelectorAll('input[type="checkbox"], input[type="hidden"]')) {
+        final name = input.attributes['name'] ?? '';
+        final lower = name.toLowerCase();
+        if (lower.contains(key) && lower.contains('unknown')) {
+          fields[name] = input.attributes['value']?.isNotEmpty == true
+              ? input.attributes['value']!
+              : '1';
+        }
+      }
     }
-    if (clearFinish) {
-      fields['$prefix[finish_date][year]'] = '';
-      fields['$prefix[finish_date][month]'] = '';
-      fields['$prefix[finish_date][day]'] = '';
+
+    if (clearStart) clearDateFields('start_date');
+    if (clearFinish) clearDateFields('finish_date');
+    fields['submitIt'] = '1';
+
+    var actionPath = (form.attributes['action'] ?? '').trim();
+    if (actionPath.startsWith(MalWebClient.base)) {
+      actionPath = actionPath.substring(MalWebClient.base.length);
     }
-    fields['submitIt'] = '0';
+    if (actionPath.isEmpty || !actionPath.startsWith('/')) {
+      actionPath = '$fallbackPath?hideLayout=1';
+    }
+    return (actionPath: actionPath, fields: fields);
+  }
+
+  /// Clears start and/or finish date via MAL's `/ownlist/<anime|manga>/<id>/edit` form
+  /// (MAL API v2 strictly rejects empty date strings with HTTP 400).
+  Future<EntryUpdate> _clearDatesViaWeb(
+    int id, {
+    required bool isAnime,
+    required bool clearStart,
+    required bool clearFinish,
+    ListEntry? previous,
+  }) async {
+    final web = MalWebClient.instance;
+    await web.session.ensureLoaded();
+    if (!web.session.isConnected) {
+      throw const MalWebNoSession();
+    }
+    final kind = isAnime ? 'anime' : 'manga';
+    final editPath = '/ownlist/$kind/$id/edit';
+    final pageResp = await web.get('$editPath?hideLayout=1');
+    if (pageResp.statusCode != 200) {
+      throw MalWebActionFailed(statusCode: pageResp.statusCode);
+    }
+    final extracted = extractClearDateForm(
+      pageResp.body,
+      isAnime: isAnime,
+      clearStart: clearStart,
+      clearFinish: clearFinish,
+      fallbackPath: editPath,
+    );
+    if (extracted == null) {
+      throw const MalWebActionFailed(message: 'Edit form not found');
+    }
 
     final postResp = await web.postForm(
-      editPath,
-      fields,
-      referer: '${MalWebClient.base}$editPath',
+      extracted.actionPath,
+      extracted.fields,
+      referer: '${MalWebClient.base}$editPath?hideLayout=1',
     );
     if (postResp.statusCode >= 400) {
       throw MalWebActionFailed(statusCode: postResp.statusCode);
     }
     final reloaded = await load(id, isAnime: isAnime);
-    final prev = previous ?? const ListEntry(status: '');
-    final updated = reloaded.entry ??
-        ListEntry(
-          status: prev.status,
-          score: prev.score,
-          progress: prev.progress,
-          volumes: prev.volumes,
-          isRepeating: prev.isRepeating,
-          timesRepeated: prev.timesRepeated,
-          repeatValue: prev.repeatValue,
-          priority: prev.priority,
-          startDate: clearStart ? null : prev.startDate,
-          finishDate: clearFinish ? null : prev.finishDate,
-          tags: prev.tags,
-          comments: prev.comments,
-        );
+    final updated = reloaded.entry;
+    if (updated == null) {
+      throw const MalWebActionFailed(message: 'Entry not found after clearing date');
+    }
+    if ((clearStart && updated.startDate != null) ||
+        (clearFinish && updated.finishDate != null)) {
+      throw const MalWebActionFailed(message: 'Date was not cleared by MyAnimeList');
+    }
     final statusObj = isAnime
         ? MyAnimeListStatus(
             status: updated.status,

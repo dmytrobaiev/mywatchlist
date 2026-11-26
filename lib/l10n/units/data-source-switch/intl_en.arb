@@ -3,7 +3,7 @@
   "Dss_Title": "Data sources",
   "Dss_Group": "Anime and manga data",
   "Dss_Current": "Current source",
-  "Dss_Muted_Until": "Jikan Edge muted until {date}",
+  "Dss_Muted_Until": "Jikan muted until {date}",
   "@Dss_Muted_Until": {
     "placeholders": {
       "date": {
@@ -11,13 +11,15 @@
       }
     }
   },
-  "Dss_Mute_Duration": "Mute Jikan Edge for",
+  "Dss_Mute_Duration": "Mute Jikan for",
+  "Dss_One_Day": "1 day",
+  "Dss_Three_Days": "3 days",
   "Dss_One_Week": "1 week",
   "Dss_Two_Weeks": "2 weeks",
   "Dss_One_Month": "1 month",
   "Dss_Three_Months": "3 months",
-  "Dss_Test_Again": "Test Jikan Edge again",
-  "Dss_Jikan_Up": "Jikan Edge answers: it is the source again",
-  "Dss_Jikan_Down": "Jikan Edge does not answer: Tenrai is used",
+  "Dss_Test_Again": "Test Jikan again",
+  "Dss_Jikan_Up": "Jikan answers: it is the source again",
+  "Dss_Jikan_Down": "Jikan does not answer: Tenrai is used",
   "Dss_Made_With_Flutter": "Made with Flutter"
 }

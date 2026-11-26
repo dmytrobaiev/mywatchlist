@@ -251,12 +251,20 @@ class MwlApi {
     int? id,
     String category = 'anime',
     int page = 1,
+    String? sort,
+    String? filterCheck,
+    String? preliminary,
+    String? spoiler,
     bool fromCache = true,
   }) async {
     final params = <String, dynamic>{
       'category': category,
       'page': page,
       if (id != null) 'id': id,
+      if (sort != null && sort.isNotEmpty) 'sort': sort,
+      if (filterCheck != null && filterCheck.isNotEmpty) 'filter_check': filterCheck,
+      if (preliminary != null && preliminary.isNotEmpty) 'preliminary': preliminary,
+      if (spoiler != null && spoiler.isNotEmpty) 'spoiler': spoiler,
     };
     final qs = _buildQuery(params);
     final result = await httpGet('reviews?$qs', fromCache: fromCache);
@@ -888,16 +896,27 @@ class MwlApi {
         fromCache: fromCache,
       );
 
-  /// Reviews: of one anime/manga when [id] is given (most voted first),
-  /// else MAL's latest reviews of [category].
+  /// Reviews: of one anime/manga when [id] is given, else MAL's latest reviews of [category].
   Future<List<ReviewHtml>> getReviewList({
     int? id,
     String category = 'anime',
     int page = 1,
+    String? sort,
+    String? filterCheck,
+    String? preliminary,
+    String? spoiler,
     bool fromCache = true,
   }) async {
     final result = await getReviews(
-        id: id, category: category, page: page, fromCache: fromCache);
+      id: id,
+      category: category,
+      page: page,
+      sort: sort,
+      filterCheck: filterCheck,
+      preliminary: preliminary,
+      spoiler: spoiler,
+      fromCache: fromCache,
+    );
     return _listOf(result?['data'], ReviewHtml.fromJson);
   }
 
@@ -908,10 +927,22 @@ class MwlApi {
     int? id,
     String category = 'anime',
     int page = 1,
+    String? sort,
+    String? filterCheck,
+    String? preliminary,
+    String? spoiler,
     bool fromCache = true,
   }) async {
     final result = await getReviews(
-        id: id, category: category, page: page, fromCache: fromCache);
+      id: id,
+      category: category,
+      page: page,
+      sort: sort,
+      filterCheck: filterCheck,
+      preliminary: preliminary,
+      spoiler: spoiler,
+      fromCache: fromCache,
+    );
     final data = result?['data'];
     if (data is! List) throw MwlApiNoAnswer('reviews', result == null ? 'no answer' : 'no data');
     return _listOf(data, ReviewHtml.fromJson);

@@ -55,6 +55,7 @@ AppPreferences _customized() {
       dubLanguage: 'french',
       dubIconStyle: 2,
       dubMinSourceCount: 3,
+      showTagSuggestions: true,
     ),
     content: const ContentPreferences().copyWith(
       showCountdownOnDetail: false,

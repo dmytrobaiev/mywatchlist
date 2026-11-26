@@ -1,5 +1,13 @@
+import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:html/dom.dart';
+import 'package:mywatchlist/constants/constants.dart' show Constants;
+import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
+import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
+import 'package:mywatchlist/services/api/MAL/mal_clubs_api.dart';
 import 'package:mywatchlist/services/api/MAL/mal_connect.dart';
 import 'package:mywatchlist/services/api/MAL/models/club/club_html.dart';
 
@@ -79,5 +87,89 @@ class TitleClubs {
       }
     }
     return null;
+  }
+}
+
+/// In-memory cached club icon resolver for Anime/Manga Details club cards
+/// (MAL's `/<category>/<id>/_/clubs` HTML omits club images).
+///
+/// Tries `jikan-edge` (`/v1/clubs/<id>`) first and falls back to
+/// [MalClubsApi.getClubData], bounded to at most 3 concurrent lookups.
+class ClubPictures extends ChangeNotifier {
+  ClubPictures._();
+
+  static final ClubPictures instance = ClubPictures._();
+
+  static const int _maxConcurrent = 3;
+
+  final Map<int, String?> _cache = {};
+  final Set<int> _inFlight = {};
+  final Queue<int> _queue = Queue<int>();
+  int _active = 0;
+
+  /// Optional test hook overriding the network lookup for a club id.
+  @visibleForTesting
+  Future<String?> Function(int clubId)? fetcher;
+
+  /// Cached club picture URL, or null if unknown / not yet fetched.
+  String? pictureOf(int clubId) => _cache[clubId];
+
+  /// Schedules a fetch for [clubId] if not already cached or queued.
+  void ensure(int clubId) {
+    if (clubId <= 0 || _cache.containsKey(clubId) || _inFlight.contains(clubId)) {
+      return;
+    }
+    _inFlight.add(clubId);
+    _queue.add(clubId);
+    _pump();
+  }
+
+  void _pump() {
+    while (_active < _maxConcurrent && _queue.isNotEmpty) {
+      final id = _queue.removeFirst();
+      _active++;
+      unawaited(_loadOne(id));
+    }
+  }
+
+  Future<void> _loadOne(int id) async {
+    String? url;
+    try {
+      url = await (fetcher?.call(id) ?? _defaultFetch(id));
+    } catch (_) {
+      url = null;
+    } finally {
+      _active--;
+      _inFlight.remove(id);
+      _cache[id] = (url != null && url.isNotEmpty) ? url : null;
+      notifyListeners();
+      _pump();
+    }
+  }
+
+  static Future<String?> _defaultFetch(int clubId) async {
+    try {
+      final res = await JikanClient.instance
+          .get(Uri.parse('${Constants.jikanV4}/clubs/$clubId'));
+      if (res.statusCode == 200 && res.body.isNotEmpty) {
+        final data = jikanMap(jikanMap(json.decode(res.body))?['data']);
+        final sizes = jikanImageSizes(data?['images'],
+            fallbackImageUrl: jikanStr(data?['image_url'] ?? data?['imageUrl']));
+        final url = sizes.medium ?? sizes.large ?? sizes.small;
+        if (url != null && url.isNotEmpty) return url;
+      }
+    } catch (_) {}
+    final page = await MalClubsApi().getClubData(clubId);
+    final url = page?.details?.pictureUrl;
+    return (url != null && url.isNotEmpty) ? url : null;
+  }
+
+  @visibleForTesting
+  void reset() {
+    _cache.clear();
+    _inFlight.clear();
+    _queue.clear();
+    _active = 0;
+    fetcher = null;
   }
 }

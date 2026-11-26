@@ -1153,105 +1153,172 @@ final RegExp _aboutSpoilerRe = RegExp(
   caseSensitive: false,
 );
 
-/// Renders character/person About text with collapsible `[Spoiler]...[/Spoiler]` blocks
-/// (no icons) and linkified URLs / social handles.
-class _AboutContent extends StatelessWidget {
+/// Renders character/person About text with compact spoiler toggle buttons
+/// (plus a top "Show all spoilers" / "Hide all spoilers" toggle when 2+
+/// spoilers exist) and linkified URLs / social handles.
+class _AboutContent extends StatefulWidget {
   final String text;
   final TextStyle? style;
 
   const _AboutContent({required this.text, this.style});
 
   @override
-  Widget build(BuildContext context) {
+  State<_AboutContent> createState() => _AboutContentState();
+}
+
+class _AboutContentState extends State<_AboutContent> {
+  final Set<int> _openSpoilers = {};
+
+  List<({bool spoiler, String body})> _parseSegments() {
     final segments = <({bool spoiler, String body})>[];
     var cursor = 0;
-    for (final match in _aboutSpoilerRe.allMatches(text)) {
+    for (final match in _aboutSpoilerRe.allMatches(widget.text)) {
       if (match.start > cursor) {
-        final plain = text.substring(cursor, match.start).trim();
+        final plain = widget.text.substring(cursor, match.start).trim();
         if (plain.isNotEmpty) segments.add((spoiler: false, body: plain));
       }
       final body = (match.group(1) ?? '').trim();
       if (body.isNotEmpty) segments.add((spoiler: true, body: body));
       cursor = match.end;
     }
-    if (cursor < text.length) {
-      final tail = text.substring(cursor).trim();
+    if (cursor < widget.text.length) {
+      final tail = widget.text.substring(cursor).trim();
       if (tail.isNotEmpty) segments.add((spoiler: false, body: tail));
     }
+    return segments;
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final segments = _parseSegments();
     if (segments.isEmpty) return const SizedBox.shrink();
     if (segments.length == 1 && !segments.first.spoiler) {
-      return _LinkifiedAboutText(text: segments.first.body, style: style);
+      return _LinkifiedAboutText(text: segments.first.body, style: widget.style);
     }
+
+    final spoilerIndices = [
+      for (var i = 0; i < segments.length; i++)
+        if (segments[i].spoiler) i,
+    ];
+    final allOpen = spoilerIndices.isNotEmpty &&
+        spoilerIndices.every(_openSpoilers.contains);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (spoilerIndices.length >= 2) ...[
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: _SpoilerTogglePill(
+              label: allOpen ? 'Hide all spoilers' : 'Show all spoilers',
+              scheme: scheme,
+              theme: theme,
+              onTap: () => setState(() {
+                if (allOpen) {
+                  _openSpoilers.clear();
+                } else {
+                  _openSpoilers.addAll(spoilerIndices);
+                }
+              }),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         for (var i = 0; i < segments.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),
           if (segments[i].spoiler)
-            _SpoilerBlock(text: segments[i].body, style: style)
+            _SpoilerBlock(
+              text: segments[i].body,
+              style: widget.style,
+              expanded: _openSpoilers.contains(i),
+              onToggle: () => setState(() {
+                if (!_openSpoilers.remove(i)) _openSpoilers.add(i);
+              }),
+            )
           else
-            _LinkifiedAboutText(text: segments[i].body, style: style),
+            _LinkifiedAboutText(text: segments[i].body, style: widget.style),
         ],
       ],
     );
   }
 }
 
-class _SpoilerBlock extends StatefulWidget {
-  final String text;
-  final TextStyle? style;
+class _SpoilerTogglePill extends StatelessWidget {
+  final String label;
+  final ColorScheme scheme;
+  final ThemeData theme;
+  final VoidCallback onTap;
 
-  const _SpoilerBlock({required this.text, this.style});
+  const _SpoilerTogglePill({
+    required this.label,
+    required this.scheme,
+    required this.theme,
+    required this.onTap,
+  });
 
   @override
-  State<_SpoilerBlock> createState() => _SpoilerBlockState();
+  Widget build(BuildContext context) {
+    return Material(
+      color: scheme.secondaryContainer,
+      borderRadius: BorderRadius.circular(999),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: scheme.onSecondaryContainer,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _SpoilerBlockState extends State<_SpoilerBlock> {
-  bool _expanded = false;
+class _SpoilerBlock extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  const _SpoilerBlock({
+    required this.text,
+    required this.expanded,
+    required this.onToggle,
+    this.style,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Material(
-      color: scheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Text(
-                _expanded ? 'Hide spoiler' : 'Spoiler',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: _expanded
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-                    child: _LinkifiedAboutText(
-                      text: widget.text,
-                      style: widget.style,
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SpoilerTogglePill(
+          label: expanded ? 'Hide spoiler' : 'Show spoiler',
+          scheme: scheme,
+          theme: theme,
+          onTap: onToggle,
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: expanded
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: _LinkifiedAboutText(text: text, style: style),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 }

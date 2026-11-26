@@ -129,6 +129,30 @@ class HtmlParsers {
         .cast<AnimeNewsOrFeaturedItem>()
         .toList();
 
+    if (newsItems.isEmpty) {
+      for (final unit in document.querySelectorAll('.box-unit3')) {
+        final link = unit.querySelector('a.box-unit3-btn') ??
+            unit.querySelector('a[href*="/news/"], a[href*="/featured/"]');
+        final url = link?.attributes['href']?.trim() ?? '';
+        final match = RegExp(r'/(?:news|featured)/(\d+)').firstMatch(url);
+        final id = int.tryParse(match?.group(1) ?? '') ?? 0;
+        final title = unit.querySelector('.title')?.text.trim() ?? '';
+        if (id == 0 || title.isEmpty) continue;
+        final img = unit.querySelector('img');
+        final imageUrl = img?.attributes['data-src'] ?? img?.attributes['src'] ?? '';
+        final text = unit.querySelector('.update')?.text.trim() ?? '';
+        final tags = unit.querySelectorAll('.tags .tag').map((e) => e.text.trim()).join(', ');
+        newsItems.add(AnimeNewsOrFeaturedItem(
+          id: id,
+          title: title,
+          text: text,
+          tags: tags,
+          imageUrl: imageUrl,
+          url: url,
+        ));
+      }
+    }
+
     var paging = Paging(previous: '', next: '');
     var paginationElement = document.querySelector('.pagination.ac');
 

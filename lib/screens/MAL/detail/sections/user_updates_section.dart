@@ -18,6 +18,9 @@ DetailSection? userUpdatesSection(DetailData data) {
       horizPadding: detailHorizPadding,
       category: data.category,
       id: data.id,
+      totalEpisodes: data.content?.numEpisodes,
+      totalChapters: data.content?.numChapters,
+      totalVolumes: data.content?.numVolumes,
     ),
   );
 }
@@ -32,6 +35,9 @@ class FriendsUpdatesSection extends StatefulWidget {
   final int id;
   final String category;
   final double horizPadding;
+  final int? totalEpisodes;
+  final int? totalChapters;
+  final int? totalVolumes;
 
   /// Friends source and Everyone view, replaceable in tests.
   final FriendsUpdatesApi? api;
@@ -42,6 +48,9 @@ class FriendsUpdatesSection extends StatefulWidget {
     required this.id,
     required this.category,
     required this.horizPadding,
+    this.totalEpisodes,
+    this.totalChapters,
+    this.totalVolumes,
     this.api,
     this.everyoneBuilder,
   });
@@ -115,7 +124,14 @@ class _FriendsUpdatesSectionState extends State<FriendsUpdatesSection> with Auto
 
   Widget _everyone(BuildContext context) =>
       widget.everyoneBuilder?.call(context) ??
-      UserUpdatesPage(horizPadding: widget.horizPadding, category: widget.category, id: widget.id);
+      UserUpdatesPage(
+        horizPadding: widget.horizPadding,
+        category: widget.category,
+        id: widget.id,
+        totalEpisodes: widget.totalEpisodes,
+        totalChapters: widget.totalChapters,
+        totalVolumes: widget.totalVolumes,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +189,9 @@ class _FriendsUpdatesSectionState extends State<FriendsUpdatesSection> with Auto
           updates: data.updates.map(userUpdateFromHtml).toList(),
           category: widget.category,
           horizPadding: widget.horizPadding,
+          totalEpisodes: widget.totalEpisodes,
+          totalChapters: widget.totalChapters,
+          totalVolumes: widget.totalVolumes,
         );
       },
     );

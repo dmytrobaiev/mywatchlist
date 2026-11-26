@@ -534,6 +534,7 @@ String _unescape(String text) {
 String _cleanText(String text) => _unescape(text)
     .replaceAll(' ', ' ')
     .replaceAll(RegExp(r'[ \t]+\n'), '\n')
+    .replaceAll(RegExp(r'\n[ \t]+'), '\n')
     .replaceAll(RegExp(r'\n{3,}'), '\n\n')
     .trim();
 

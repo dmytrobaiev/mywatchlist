@@ -10,6 +10,7 @@ import 'package:mywatchlist/user/preferences/preferences_bloc.dart';
 import 'package:mywatchlist/user/user_mal_v2.dart';
 import 'package:mywatchlist/utils/app_routes.dart';
 import 'package:mywatchlist/widgets/common/list_sort_filter.dart';
+import 'package:mywatchlist/widgets/user/edit/list_entry_service.dart' show MalListEntryService;
 import 'package:mywatchlist/widgets/user/list/cards/entry_cards.dart';
 import 'package:mywatchlist/widgets/user/list/cards/entry_parts.dart';
 import 'package:mywatchlist/widgets/user/list/bulk/list_bulk.dart';
@@ -89,6 +90,10 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
 
   /// The entries shown last (after the compare filter), for "select all".
   List<ListEntryView> _shown = const [];
+
+  /// Whether the signed-in user can write a MAL list (bulk add needs it).
+  bool get _canWrite =>
+      const MalListEntryService().canEdit && UserMalV2.instance.username != null;
 
   /// The signed-in user's own statuses (the whole list is kept there).
   ListStatusCache get _mine => widget.myList ?? ListStatusCache.instance;
@@ -241,7 +246,6 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
   Widget _bulkBar(BuildContext context) {
     final s = S.of(context);
     final picked = _picked();
-    final inMine = [for (final e in picked) if (_inMine(e)) e];
     return BulkActionBar(
       selection: _selection,
       shown: [for (final e in _shown) e.id],
@@ -250,12 +254,6 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
           icon: Icons.playlist_add_rounded,
           label: s.Bulk_Add_Mine,
           onPressed: picked.isEmpty ? null : () => _addToMine(picked),
-        ),
-        BulkAction(
-          icon: Icons.playlist_remove_rounded,
-          label: s.Bulk_Remove_Mine,
-          destructive: true,
-          onPressed: inMine.isEmpty ? null : () => _removeFromMine(inMine),
         ),
       ],
     );
@@ -275,17 +273,6 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
       context,
       total: picked.length,
       work: (onProgress) => writer.setStatus(picked, status, onProgress: onProgress),
-    );
-    if (mounted) _selection.stop();
-  }
-
-  Future<void> _removeFromMine(List<ListEntryView> picked) async {
-    if (!await confirmBulkRemove(context, picked.length) || !mounted) return;
-    final writer = MalBulkWriter(cache: _mine);
-    await runBulkWithProgress(
-      context,
-      total: picked.length,
-      work: (onProgress) => writer.remove(picked, onProgress: onProgress),
     );
     if (mounted) _selection.stop();
   }
@@ -319,6 +306,16 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
                   onSelectionChanged: (v) => _select(category: v.first),
                 ),
                 const Spacer(),
+                if (_canWrite)
+                  IconButton(
+                    tooltip: s.Bulk_Select,
+                    isSelected: _selection.active,
+                    icon: const Icon(Icons.checklist_rounded),
+                    selectedIcon: Icon(Icons.checklist_rounded,
+                        color: Theme.of(context).colorScheme.primary),
+                    onPressed: () =>
+                        _selection.active ? _selection.stop() : _selection.start(),
+                  ),
                 if (comparing)
                   _CompareButton(
                     value: _compare,
@@ -431,8 +428,15 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
     Widget pickable(ListEntryView e, Widget card) =>
         SelectableEntry(selection: _selection, id: e.id, child: card);
 
-    Widget? mark(ListEntryView e, {bool dense = false}) => comparing
-        ? MyListMark(id: e.id, category: e.category, dense: dense, onImage: dense, cache: _mine)
+    Widget? mark(ListEntryView e, {bool dense = false, bool inline = false}) => comparing
+        ? MyListMark(
+            id: e.id,
+            category: e.category,
+            dense: dense,
+            onImage: dense,
+            inline: inline,
+            cache: _mine,
+          )
         : null;
 
     final now = DateTime.now();
@@ -471,7 +475,11 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
           style: style,
           now: now,
           locale: locale,
-          mark: mark(entries[i], dense: subType == DisplaySubType.compact),
+          mark: mark(
+            entries[i],
+            dense: subType == DisplaySubType.compact,
+            inline: subType != DisplaySubType.compact,
+          ),
         )),
       );
     }
@@ -484,57 +492,116 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
 }
 
 /// Compare with the signed-in user's list: all the titles, the ones both lists hold, or the
-/// ones the user does not have. The counts cover the titles loaded so far.
+/// ones the user does not have. Opens a Material 3 modal bottom sheet matching the app's UI.
 class _CompareButton extends StatelessWidget {
-  const _CompareButton({required this.value, required this.common, required this.missing, required this.onChanged});
+  const _CompareButton({
+    required this.value,
+    required this.common,
+    required this.missing,
+    required this.onChanged,
+  });
 
   final _Compare value;
   final int common;
   final int missing;
   final ValueChanged<_Compare> onChanged;
 
+  Future<void> _pick(BuildContext context) async {
+    final s = S.of(context);
+    final picked = await showModalBottomSheet<_Compare>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final scheme = theme.colorScheme;
+        Widget tile(_Compare option, IconData icon, String label, int? count) {
+          final selected = option == value;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            child: ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              selected: selected,
+              selectedTileColor: scheme.secondaryContainer.withValues(alpha: 0.6),
+              selectedColor: scheme.onSecondaryContainer,
+              leading: Icon(icon),
+              title: Text(
+                label,
+                style: TextStyle(fontWeight: selected ? FontWeight.w600 : FontWeight.normal),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (count != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? scheme.secondaryContainer
+                            : scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (selected) const Icon(Icons.check_rounded, size: 20),
+                ],
+              ),
+              onTap: () => Navigator.pop(sheetContext, option),
+            ),
+          );
+        }
+
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: Text(s.Mlp_Compare, style: theme.textTheme.titleMedium),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Text(
+                  s.Mlp_Loaded_Hint,
+                  style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ),
+              tile(_Compare.all, Icons.list_rounded, s.Mlp_All, null),
+              tile(_Compare.common, Icons.person_rounded, s.Mlp_Common, common),
+              tile(_Compare.missing, Icons.person_off_outlined, s.Mlp_Missing, missing),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked != null && picked != value) onChanged(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final scheme = Theme.of(context).colorScheme;
-    PopupMenuEntry<_Compare> item(_Compare v, IconData icon, String label, int? count) => CheckedPopupMenuItem(
-          value: v,
-          checked: v == value,
-          child: Row(
-            children: [
-              Icon(icon, size: 20),
-              const SizedBox(width: 12),
-              Flexible(child: Text(count == null ? label : s.Mlp_Count(label, count))),
-            ],
-          ),
-        );
-    return PopupMenuButton<_Compare>(
+    return IconButton(
       tooltip: s.Mlp_Compare,
-      onSelected: onChanged,
+      onPressed: () => _pick(context),
       icon: Badge(
         isLabelVisible: value != _Compare.all,
         smallSize: 8,
         backgroundColor: scheme.primary,
-        child: Icon(Icons.compare_arrows_rounded, color: value == _Compare.all ? null : scheme.primary),
+        child: Icon(
+          Icons.compare_arrows_rounded,
+          color: value == _Compare.all ? null : scheme.primary,
+        ),
       ),
-      itemBuilder: (context) => [
-        PopupMenuItem<_Compare>(
-          enabled: false,
-          height: 36,
-          child: Text(s.Mlp_Compare, style: Theme.of(context).textTheme.labelLarge),
-        ),
-        item(_Compare.all, Icons.list_rounded, s.Mlp_All, null),
-        item(_Compare.common, Icons.person_rounded, s.Mlp_Common, common),
-        item(_Compare.missing, Icons.person_off_outlined, s.Mlp_Missing, missing),
-        PopupMenuItem<_Compare>(
-          enabled: false,
-          height: 32,
-          child: Text(
-            s.Mlp_Loaded_Hint,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ),
-      ],
     );
   }
 }

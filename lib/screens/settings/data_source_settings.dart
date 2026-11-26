@@ -7,10 +7,9 @@ import 'package:mywatchlist/widgets/common/select/select.dart';
 
 /// Label of a mute duration choice.
 String jikanMuteLabel(JikanMuteDuration duration) => switch (duration) {
+      JikanMuteDuration.oneDay => S.current.Dss_One_Day,
+      JikanMuteDuration.threeDays => S.current.Dss_Three_Days,
       JikanMuteDuration.oneWeek => S.current.Dss_One_Week,
-      JikanMuteDuration.twoWeeks => S.current.Dss_Two_Weeks,
-      JikanMuteDuration.oneMonth => S.current.Dss_One_Month,
-      JikanMuteDuration.threeMonths => S.current.Dss_Three_Months,
     };
 
 /// Settings > Data sources: the server answering the anime and manga data (Jikan or

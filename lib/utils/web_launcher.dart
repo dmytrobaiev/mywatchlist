@@ -75,10 +75,10 @@ MalLink? parseMalLink(Uri uri) {
   return MalLink(kind: segments.first.toLowerCase(), id: id, segments: segments, query: query, uri: uri);
 }
 
-/// Opens [uri] in a Custom Tab / Safari view on mobile (http and https only),
-/// the system handler otherwise; falls back to the external browser when the
-/// in-app tab is unavailable.
-Future<bool> defaultUrlOpener(Uri uri, {Color? barColor, Color? onBarColor, bool external = false}) async {
+/// Opens [uri] directly via the system handler ([LaunchMode.externalApplication])
+/// by default so apps supporting the link open directly, or in a Custom Tab /
+/// Safari view when [external] is explicitly false.
+Future<bool> defaultUrlOpener(Uri uri, {Color? barColor, Color? onBarColor, bool external = true}) async {
   final web = uri.scheme == 'http' || uri.scheme == 'https';
   final mobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
   if (web && mobile && !external) {
@@ -95,10 +95,10 @@ Future<bool> defaultUrlOpener(Uri uri, {Color? barColor, Color? onBarColor, bool
   return launcher.launchUrl(uri, mode: launcher.LaunchMode.externalApplication);
 }
 
-/// Opens [url] in an in-app browser tab themed from [context] (surface
-/// colors), or in the system browser when [external]. Shows "Couldn't launch"
-/// and returns false on failure.
-Future<bool> launchWebView(String url, {BuildContext? context, bool external = false}) async {
+/// Opens [url] externally by default (allowing apps that support the link to
+/// handle it directly), or in an in-app browser tab when [external] is false.
+/// Shows "Couldn't launch" and returns false on failure.
+Future<bool> launchWebView(String url, {BuildContext? context, bool external = true}) async {
   final uri = Uri.tryParse(url.trim());
   ColorScheme? scheme;
   if (context != null && context.mounted) scheme = Theme.of(context).colorScheme;

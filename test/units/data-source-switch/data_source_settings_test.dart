@@ -39,8 +39,8 @@ void main() {
     await _pump(tester, source);
     expect(find.text(S.current.Dss_Title), findsWidgets);
     expect(find.text('Tenrai'), findsOneWidget);
-    expect(find.text(S.current.Dss_Muted_Until('Nov 29, 2026')), findsOneWidget);
-    expect(find.text(S.current.Dss_One_Month), findsOneWidget, reason: 'default duration');
+    expect(find.text(S.current.Dss_Muted_Until('Oct 31, 2026')), findsOneWidget);
+    expect(find.text(S.current.Dss_One_Day), findsOneWidget, reason: 'default duration');
   });
 
   testWidgets('the duration sheet saves the choice', (tester) async {
@@ -61,8 +61,8 @@ void main() {
     jikanAnswers = true;
     await tester.tap(find.text(S.current.Dss_Test_Again));
     await tester.pumpAndSettle();
-    expect(find.text('Jikan Edge'), findsOneWidget);
-    expect(find.textContaining('Nov'), findsNothing);
+    expect(find.text('Jikan'), findsOneWidget);
+    expect(find.textContaining('Oct'), findsNothing);
     expect(find.text(S.current.Dss_Jikan_Up), findsOneWidget);
   });
 
@@ -71,7 +71,7 @@ void main() {
     expect(find.text('Sources de données'), findsWidgets);
     expect(find.text('Mettre Jikan en pause pendant'), findsOneWidget);
     expect(find.text('Tester Jikan à nouveau'), findsOneWidget);
-    expect(find.text('Jikan en pause jusqu’au 29 nov. 2026'), findsOneWidget);
+    expect(find.text('Jikan en pause jusqu’au 31 oct. 2026'), findsOneWidget);
     await S.load(const Locale('en'));
   });
 
@@ -79,6 +79,6 @@ void main() {
     await S.load(const Locale('en'));
     expect(AppRoutes.settingsPageFor(SettingsSection.dataSources), isA<DataSourceSettingsPage>());
     expect(SettingsSection.dataSources.title, S.current.Dss_Title);
-    expect(dataSourceStatus(source), 'Tenrai · ${S.current.Dss_Muted_Until('Nov 29, 2026')}');
+    expect(dataSourceStatus(source), 'Tenrai · ${S.current.Dss_Muted_Until('Oct 31, 2026')}');
   });
 }

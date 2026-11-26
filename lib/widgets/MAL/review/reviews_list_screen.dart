@@ -61,13 +61,14 @@ class _ReviewsListScreenState extends State<ReviewsListScreen> {
     if (position.pixels >= position.maxScrollExtent - _loadMoreDistance) _feed.loadMore();
   }
 
-  List<AnimeReview> _filtered() =>
-      filterReviews(_feed.reviews, sort: _filters.sort, score: _filters.score, tags: _filters.tags);
+  List<AnimeReview> _filtered() => _feed.reviews;
 
-  void _setFilters(ReviewFilters filters) => setState(() {
-        _filters = filters;
-        _visible = _filtered();
-      });
+  void _setFilters(ReviewFilters filters) {
+    setState(() {
+      _filters = filters;
+    });
+    _feed.setQuery(sort: filters.sort, tags: filters.tags);
+  }
 
   String get _webUrl => 'https://myanimelist.net/${widget.category}/${widget.id}/x/reviews';
 
@@ -75,6 +76,7 @@ class _ReviewsListScreenState extends State<ReviewsListScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasContent = !_feed.isEmpty;
+    final showControls = hasContent || _feed.everLoaded || _filters.narrowed || _filters.sort != ReviewSort.helpful;
     return Scaffold(
       body: CustomScrollView(
         controller: _scroll,
@@ -91,7 +93,7 @@ class _ReviewsListScreenState extends State<ReviewsListScreen> {
                 onPressed: () => openLink(context, _webUrl),
               ),
             ],
-            bottom: hasContent
+            bottom: showControls
                 ? PreferredSize(
                     preferredSize: const Size.fromHeight(46),
                     child: Align(
@@ -143,9 +145,9 @@ class _ReviewsListScreenState extends State<ReviewsListScreen> {
         SliverFillRemaining(
           hasScrollBody: false,
           child: ReviewsEmptyState(
-            filtered: hasContent,
+            filtered: _filters.narrowed,
             onClear: () => _setFilters(_filters.cleared()),
-            onLoadMore: hasContent && _feed.hasMore ? _feed.loadMore : null,
+            onLoadMore: _filters.narrowed && _feed.hasMore ? _feed.loadMore : null,
             loadingMore: _feed.loading,
           ),
         ),

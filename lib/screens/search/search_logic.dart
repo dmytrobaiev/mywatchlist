@@ -4,7 +4,24 @@ part of 'general_search_screen.dart';
 extension _SearchLogic on _GeneralSearchScreenState {
   void _onTextChanged() {
     final text = _searchController.text;
-    final special = text.startsWith('#');
+    final prev = _lastQueryText;
+    // Backspace on an active `#...` special tag clears the entire tag at once.
+    final wasValidSpecial = _specialQuery &&
+        prev.startsWith('#') &&
+        SpecialQuery.parse(prev.substring(1)) != null;
+    if (wasValidSpecial && text.isNotEmpty && text.length < prev.length && prev.startsWith(text)) {
+      _lastQueryText = '';
+      _searchController.value = const TextEditingValue();
+      _set(() {
+        _specialQuery = false;
+        _filters = SearchFilters.empty;
+      });
+      if (_stage != SearchStage.notStarted) _resetResults();
+      _scheduleSuggestions('');
+      return;
+    }
+    _lastQueryText = text;
+    final special = text.startsWith('#') && SpecialQuery.parse(text.substring(1)) != null;
     if (special != _specialQuery) _set(() => _specialQuery = special);
     if (text.isEmpty && _stage != SearchStage.notStarted) {
       _resetResults();
@@ -23,10 +40,26 @@ extension _SearchLogic on _GeneralSearchScreenState {
   }
 
   /// Autocomplete: anime and manga titles for three letters or more, after a pause in typing,
-  /// only while no search is showing. An older answer never replaces a newer one.
+  /// only while no search is showing. When `showTagSuggestions` is enabled in Settings, also
+  /// suggests matching `#...` special tags while typing `#...`.
   void _scheduleSuggestions(String text) {
     _suggestTimer?.cancel();
     final query = text.trim();
+    if (_stage == SearchStage.notStarted &&
+        query.startsWith('#') &&
+        Preferences.general.showTagSuggestions) {
+      final specials = SpecialQuery.suggestions(query);
+      if (specials.isEmpty) {
+        if (_suggestions.value.isActive) _suggestions.value = SuggestionState.idle;
+      } else {
+        _suggestions.value = SuggestionState(
+          query: query,
+          category: _category,
+          specials: specials,
+        );
+      }
+      return;
+    }
     final category = _category == SearchCategory.manga ? SearchCategory.manga : SearchCategory.anime;
     final eligible = _stage == SearchStage.notStarted &&
         query.length >= 3 &&

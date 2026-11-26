@@ -17,12 +17,14 @@ class SuggestionState {
   final String query;
   final String category;
   final List<Anime> items;
+  final List<({String query, String label})> specials;
   final bool loading;
 
   const SuggestionState({
     this.query = '',
     this.category = 'anime',
     this.items = const [],
+    this.specials = const [],
     this.loading = false,
   });
 
@@ -132,26 +134,48 @@ class _SuggestionsSliver extends StatelessWidget {
       builder: (context, state, _) {
         if (!state.isActive) return const SliverToBoxAdapter(child: SizedBox.shrink());
         final theme = Theme.of(context);
+        final isSpecialInput = state.query.startsWith('#');
         return SliverMainAxisGroup(
           slivers: [
             _SectionHeader(S.current.Srch_Suggestions),
-            SliverToBoxAdapter(
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.search_rounded),
-                title: Text(S.current.Srch_Search_For(state.query)),
-                trailing: state.loading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : null,
-                onTap: () => onQuery(state.query),
+            if (!isSpecialInput)
+              SliverToBoxAdapter(
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.search_rounded),
+                  title: Text(S.current.Srch_Search_For(state.query)),
+                  trailing: state.loading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : null,
+                  onTap: () => onQuery(state.query),
+                ),
               ),
-            ),
+            if (state.specials.isNotEmpty)
+              SliverList.builder(
+                itemCount: state.specials.length,
+                itemBuilder: (context, index) {
+                  final preset = state.specials[index];
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(Icons.tag_rounded, color: theme.colorScheme.primary),
+                    title: Text(
+                      preset.query,
+                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      preset.label,
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    onTap: () => onQuery(preset.query),
+                  );
+                },
+              ),
             SliverList.builder(
               itemCount: state.items.length,
               itemBuilder: (context, index) =>
                   MediaTile(item: state.items[index], category: state.category, size: MediaTileSize.compact),
             ),
-            if (!state.loading && state.items.isEmpty)
+            if (!state.loading && state.items.isEmpty && state.specials.isEmpty)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -281,7 +305,8 @@ class _RecentList extends StatelessWidget {
                 height: cardHeight,
                 gridHeight: cardHeight,
                 showText: false,
-                showMemberCount: false,
+                showMemberCount: true,
+                showMembers: size != HomePageTileSize.xs,
                 displaySubType: DisplaySubType.compact,
                 onTap: () => openMedia(context, item, category),
                 onClose: () => onRemove(item.id),

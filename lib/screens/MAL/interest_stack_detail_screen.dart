@@ -1,7 +1,7 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:mywatchlist/widgets/common/background.dart';
+import 'package:mywatchlist/widgets/common/app_colors.dart';
 import 'package:mywatchlist/widgets/user/list/list_status_pill.dart';
 import 'package:intl/intl.dart';
 import 'package:mywatchlist/cache/bookmarks.dart';
@@ -234,6 +234,23 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
     );
   }
 
+  List<String> get _stackImages {
+    final listed = [
+      for (final u in widget.stack.imageUrls ?? const <String>[])
+        if (u.trim().isNotEmpty) u.trim(),
+    ];
+    if (listed.isNotEmpty) return listed.reversed.toList();
+    final fromEntries = <String>[];
+    for (final e in _entries) {
+      final url = e['imageUrl'];
+      if (url is String && url.trim().isNotEmpty) {
+        fromEntries.add(url.trim());
+        if (fromEntries.length >= 3) break;
+      }
+    }
+    return fromEntries.reversed.toList();
+  }
+
   Widget _headerWidget(BuildContext context, {required bool hasTabs}) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
@@ -246,65 +263,70 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
       if (updated != null) S.current.StackPolish_Updated(updated),
     ];
     final entriesCount = _entries.length;
+    final images = _stackImages;
 
     return FlexibleSpaceBar(
-      background: Material(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Background(
-              context: context,
-              url: _coverUrl,
-              forceBg: true,
-            ),
-            Padding(
-              padding: EdgeInsets.only(
-                top: topInset + kToolbarHeight + 12,
-                left: 16,
-                right: 16,
-                bottom: hasTabs ? 60 : 16,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 72.0),
-                    child: AutoSizeText(
-                      _title,
-                      style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  InterestStackAuthor(username: widget.stack.username, align: TextAlign.start),
-                  if (dateParts.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      dateParts.join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+      background: ColoredBox(
+        color: theme.colorScheme.surface,
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: topInset + kToolbarHeight + 8,
+            left: 16,
+            right: 16,
+            bottom: hasTabs ? 58 : 16,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 72.0),
+                      child: AutoSizeText(
+                        _title,
+                        style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ],
-                  if (entriesCount > 0) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      S.current.Social_Stack_Entries(entriesCount),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                    const SizedBox(height: 8),
+                    InterestStackAuthor(username: widget.stack.username, align: TextAlign.start),
+                    if (dateParts.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        dateParts.join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    ],
+                    if (entriesCount > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        S.current.Social_Stack_Entries(entriesCount),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              SizedBox(
+                width: 108,
+                height: 152,
+                child: InterestStackPictures(images: images),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -402,85 +424,140 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
 
   Widget _buildShell(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final placeholder = scheme.surfaceContainerHighest;
     return SafeArea(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SB.h20,
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SB.w20,
-              Expanded(
-                child: Column(
-                  children: [
-                    Container(
-                      height: 24,
-                      width: 180,
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(4),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 22,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: placeholder,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
-                    ),
-                    SB.h15,
-                    Container(
-                      height: 16,
-                      width: 100,
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(4),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 22,
+                        width: 140,
+                        decoration: BoxDecoration(
+                          color: placeholder,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      Container(
+                        height: 14,
+                        width: 110,
+                        decoration: BoxDecoration(
+                          color: placeholder,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 12,
+                        width: 160,
+                        decoration: BoxDecoration(
+                          color: placeholder,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              SB.w20,
-              Container(
-                height: 240,
-                width: 170,
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(6),
+                const SizedBox(width: 14),
+                Container(
+                  width: 108,
+                  height: 152,
+                  decoration: BoxDecoration(
+                    color: placeholder,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-              ),
-              SB.w20,
-            ],
+              ],
+            ),
           ),
-          SB.h20,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  height: 16,
+                  width: 64,
+                  decoration: BoxDecoration(
+                    color: placeholder,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  height: 16,
+                  width: 84,
+                  decoration: BoxDecoration(
+                    color: placeholder,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
           Expanded(
             child: ListView.builder(
               itemCount: 5,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               itemBuilder: (_, __) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5),
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: stackCoverWidth,
                       height: stackCoverHeight,
                       decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHighest,
+                        color: placeholder,
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
-                    SB.w15,
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            height: 18,
-                            width: double.infinity,
+                            height: 14,
+                            width: 96,
                             decoration: BoxDecoration(
-                              color: scheme.surfaceContainerHighest,
+                              color: placeholder,
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
-                          SB.h10,
+                          const SizedBox(height: 8),
+                          Container(
+                            height: 18,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: placeholder,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           Container(
                             height: 14,
                             width: 120,
                             decoration: BoxDecoration(
-                              color: scheme.surfaceContainerHighest,
+                              color: placeholder,
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -740,7 +817,7 @@ class StackEntryTile extends StatelessWidget {
                     children: [
                       if (score != null && score > 0) ...[
                         Icon(Icons.star_rounded,
-                            size: 16, color: theme.colorScheme.primary),
+                            size: 16, color: AppColors.of(context).score.color),
                         const SizedBox(width: 2),
                         ScoreReveal(
                           child: Text(

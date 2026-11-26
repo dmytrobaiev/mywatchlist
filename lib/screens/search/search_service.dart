@@ -158,9 +158,17 @@ class SearchService {
   /// MyAnimeList's `/news` or `/featured` page [page], newest first. A failure is thrown (the
   /// screen shows it) rather than shown as an empty list.
   static Future<AnimeNewsOrFeaturedResult?> _latestArticles(String category, int page) async {
-    final response = await MalConnect.retryGet('https://myanimelist.net/$category?p=$page', {});
+    final response = await MalConnect.retryGet(
+      'https://myanimelist.net/$category?p=$page',
+      const {
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    );
     if (response.statusCode != 200) throw Exception('Failed to load $category (${response.statusCode})');
-    return parseLatestArticles(response.body);
+    final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+    return parseLatestArticles(body);
   }
 
   /// Whether Jikan is tried at all (tests turn it off).

@@ -8,6 +8,7 @@ import 'package:mywatchlist/screens/forum/club_comments_screen.dart';
 import 'package:mywatchlist/screens/forum/club_forum_screen.dart';
 import 'package:mywatchlist/screens/forum/club_members_screen.dart';
 import 'package:mywatchlist/services/api/MAL/mal_clubs_api.dart';
+import 'package:mywatchlist/services/api/MAL/mal_user_pictures.dart';
 import 'package:mywatchlist/services/api/MAL/models/club/club_data.dart';
 import 'package:mywatchlist/services/api/MAL/models/club/club_html.dart';
 import 'package:mywatchlist/utils/web_launcher.dart';
@@ -59,12 +60,33 @@ class _ClubScreenState extends State<ClubScreen> {
     final data = await _clubsApi.getClubData(_id);
     if (!mounted) return;
     final positions = <String, String>{};
+    final staffUsernames = <String>[];
     for (final staff in data?.details?.staffs ?? const <ClubStaff>[]) {
       final position = staff.position?.replaceAll('(', '').replaceAll(')', '').trim();
       final username = staff.user?.username;
-      if (username != null && position != null && position.isNotEmpty) {
-        positions[username] = position;
+      if (username != null && username.isNotEmpty) {
+        staffUsernames.add(username);
+        if (position != null && position.isNotEmpty) {
+          positions[username] = position;
+        }
       }
+    }
+    if (data != null && staffUsernames.isNotEmpty) {
+      final known = <String, String?>{};
+      for (final member in data.members ?? const <ClubMember>[]) {
+        final name = member.username;
+        if (name != null && name.isNotEmpty && (member.imageUrl?.isNotEmpty ?? false)) {
+          known[name] = member.imageUrl;
+        }
+      }
+      for (final comment in data.comments ?? const <ClubComment>[]) {
+        final name = comment.by?.username;
+        final img = comment.by?.imageUrl;
+        if (name != null && name.isNotEmpty && (img?.isNotEmpty ?? false)) {
+          known.putIfAbsent(name, () => img);
+        }
+      }
+      MalUserPictures.instance.prefetch(staffUsernames, known: known);
     }
     setState(() {
       _clubData = data;

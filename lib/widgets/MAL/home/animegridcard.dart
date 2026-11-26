@@ -175,6 +175,7 @@ class AnimeGridCard extends StatelessWidget {
   final double borderRadius;
   final bool showTime;
   final bool showMemberCount;
+  final bool showMembers;
 
   /// Shows the status / edit button (comfortable bar or compact corner).
   final bool showCardBar;
@@ -216,6 +217,7 @@ class AnimeGridCard extends StatelessWidget {
     this.smallHeight = 30,
     this.smallWidth = 30,
     this.showMemberCount = true,
+    this.showMembers = true,
     this.onEdit,
     this.parentNsv,
     this.horizPadding = 5.0,
@@ -573,10 +575,10 @@ class AnimeGridCard extends StatelessWidget {
     final hasScore = score > 0;
     final hasMembers = members > 0;
     final children = <Widget>[
-      if (compact && showMemberCount && (hasScore || hasMembers))
+      if (compact && showMemberCount && (hasScore || (showMembers && hasMembers)))
         ScoreMembersBadge(
           score: hasScore ? score : null,
-          members: hasMembers ? members : null,
+          members: showMembers && hasMembers ? members : null,
           radius: borderRadius,
         ),
       if (favorites != null && favorites! > 0)
@@ -1236,24 +1238,19 @@ Future<void> showContentEditSheet(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: false,
-    builder: (sheetContext) => ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
-      ),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-        ),
-        child: ContentEditWidget(
-          onDismiss: () => Navigator.pop(sheetContext),
-          id: node.id,
-          category: category,
-          onListStatusChange: remember,
-          onDelete: () {
-            cache.remove(node.id, category: category);
-            onDelete?.call();
-          },
-        ),
+    builder: (sheetContext) => QuickEditModalSheet.editor(
+      editorBuilder: (context, expanded, onExpandedChanged) => ContentEditWidget(
+        onDismiss: () => Navigator.pop(sheetContext),
+        id: node.id,
+        category: category,
+        enableSwipe: false,
+        expanded: expanded,
+        onExpandedChanged: onExpandedChanged,
+        onListStatusChange: remember,
+        onDelete: () {
+          cache.remove(node.id, category: category);
+          onDelete?.call();
+        },
       ),
     ),
   );
