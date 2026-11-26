@@ -148,7 +148,7 @@ void main() {
         ctx = c;
         return const SizedBox.shrink();
       })));
-      await launchWebView(ctx, 'https://example.com');
+      await launchWebView('https://example.com', context: ctx);
       expect(capturedExternal, isTrue);
     });
   });
@@ -263,7 +263,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(_app(UserUpdatesGrid(
         updates: [
-          user_updates.UserUpdate(
+          user_updates.AnimeUserUpdate(
             user: user_updates.User(username: 'alice'),
             status: 'Watching',
             episodesSeen: null,
@@ -271,6 +271,7 @@ void main() {
           ),
         ],
         category: 'anime',
+        horizPadding: 0,
         totalEpisodes: 25,
       )));
       expect(find.text('0/25'), findsOneWidget);

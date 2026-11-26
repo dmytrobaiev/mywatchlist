@@ -67,11 +67,12 @@ class SidebarItemPreference extends Equatable {
 
   static SidebarItemPreference? fromJson(Object? raw) {
     if (raw is! Map) return null;
-    final name = raw['item'];
+    final map = Map<String, dynamic>.from(raw);
+    final name = map['item'];
     if (name is! String) return null;
     final item = SidebarItem.values.where((e) => e.name == name).firstOrNull;
     if (item == null) return null;
-    final visible = readBool(raw, 'visible', true);
+    final visible = readBool(map, 'visible', true);
     return SidebarItemPreference(item, visible: visible);
   }
 

@@ -8,7 +8,7 @@ import 'package:mywatchlist/screens/forum/club_comments_screen.dart';
 import 'package:mywatchlist/screens/forum/club_forum_screen.dart';
 import 'package:mywatchlist/screens/forum/club_members_screen.dart';
 import 'package:mywatchlist/services/api/MAL/mal_clubs_api.dart';
-import 'package:mywatchlist/services/api/MAL/mal_user_pictures.dart';
+import 'package:mywatchlist/services/api/MAL/web/mal_messages_api.dart';
 import 'package:mywatchlist/services/api/MAL/models/club/club_data.dart';
 import 'package:mywatchlist/services/api/MAL/models/club/club_html.dart';
 import 'package:mywatchlist/utils/web_launcher.dart';
