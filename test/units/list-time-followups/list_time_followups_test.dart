@@ -205,8 +205,8 @@ void main() {
         _anime(1, rewatched: 2),
         style: const EntryCardStyle(showStatus: true),
       );
+      expect(find.byIcon(Icons.replay_rounded), findsOneWidget);
       expect(find.text('×2'), findsOneWidget);
-      expect(find.bySemanticsLabel('Rewatched ×2'), findsOneWidget);
 
       await pumpRow(
         tester,
