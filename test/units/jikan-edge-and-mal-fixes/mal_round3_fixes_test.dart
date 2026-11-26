@@ -102,6 +102,7 @@ void main() {
 <html><body>
 <form id="main-form" action="https://myanimelist.net/ownlist/anime/5114/edit?hideLayout=1" method="post">
   <input type="hidden" name="csrf_token" value="tok123">
+  <input type="hidden" name="anime_id" value="5114">
   <select name="add_anime[status]"><option value="2" selected>Completed</option></select>
   <select name="add_anime[start_date][month]"><option value="">--</option><option value="1" selected>Jan</option></select>
   <select name="add_anime[start_date][day]"><option value="">--</option><option value="5" selected>5</option></select>
@@ -120,7 +121,9 @@ void main() {
       );
       expect(extracted, isNotNull);
       expect(extracted!.actionPath, '/ownlist/anime/5114/edit?hideLayout=1');
-      expect(extracted.fields['csrf_token'], 'tok123');
+      // csrf_token is stripped so MalWebClient.postForm supplies the live token.
+      expect(extracted.fields.containsKey('csrf_token'), isFalse);
+      expect(extracted.fields['anime_id'], '5114');
       expect(extracted.fields['add_anime[status]'], '2');
       expect(extracted.fields['add_anime[start_date][month]'], '');
       expect(extracted.fields['add_anime[start_date][day]'], '');

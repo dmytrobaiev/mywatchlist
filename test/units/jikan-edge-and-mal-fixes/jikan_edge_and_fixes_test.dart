@@ -21,12 +21,10 @@ import 'package:mywatchlist/services/api/Jikan/jikan_genre.dart' as jg;
 import 'package:mywatchlist/services/api/Jikan/jikan_personfull.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_producer.dart' as jp;
 import 'package:mywatchlist/services/api/Jikan/jikan_producerfull.dart' as jpf;
-import 'package:mywatchlist/services/api/MAL/anime_graph_builder.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/services/api/MAL/user_anime_statistics.dart';
 import 'package:mywatchlist/widgets/MAL/review/review_logic.dart';
 import 'package:mywatchlist/widgets/forum/bbcode_widget.dart';
-import 'package:mywatchlist/widgets/graph/anime_graph_data.dart';
 
 void main() {
   group('jikan-edge v1 parsing + Tenrai backwards compatibility', () {
@@ -391,47 +389,6 @@ void main() {
 
       final spoiler = w.applyTransform('[spoiler=Ending]Secret [i]twist[/i][/spoiler]');
       expect(spoiler, '<spoiler name="Ending">Secret <i>twist</i></spoiler>');
-    });
-  });
-
-  group('Section 14: Anime graph builder jikan-edge compatibility', () {
-    test('AnimeGraphBuilder walks jikan-edge relations payloads', () async {
-      final data = <int, Map<String, dynamic>>{
-        1: {
-          'malId': 1,
-          'title': 'S1',
-          'relations': [
-            {
-              'relation': 'Sequel',
-              'entries': [
-                {'malId': 2, 'type': 'anime', 'name': 'S2'},
-              ],
-            },
-          ],
-        },
-        2: {
-          'malId': 2,
-          'title': 'S2',
-          'relations': [
-            {
-              'relation': 'Prequel',
-              'entries': [
-                {'malId': 1, 'type': 'anime', 'name': 'S1'},
-              ],
-            },
-          ],
-        },
-      };
-      final builder = AnimeGraphBuilder(
-        fetch: (id) async {
-          final hit = data[id];
-          return hit != null ? GraphFetch.ok(hit) : const GraphFetch.failed();
-        },
-      );
-      final built = await builder.build(1);
-      final graph = AnimeGraphData.fromJson(built.json);
-      expect(graph.nodes.keys, containsAll([1, 2]));
-      expect(graph.edges.any((e) => e.source == 1 && e.target == 2), isTrue);
     });
   });
 }

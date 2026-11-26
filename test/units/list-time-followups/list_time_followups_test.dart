@@ -176,23 +176,46 @@ void main() {
   });
 
   group('rewatch badge', () {
-    Future<void> pumpRow(WidgetTester tester, ListEntryView entry) => tester.pumpWidget(_app(
+    Future<void> pumpRow(
+      WidgetTester tester,
+      ListEntryView entry, {
+      EntryCardStyle style = const EntryCardStyle(showStatus: false),
+    }) =>
+        tester.pumpWidget(_app(
           SizedBox(
             height: listRowExtent(DisplaySubType.comfortable),
             child: EntryListTile(
               entry: entry,
               subType: DisplaySubType.comfortable,
               actions: _actions,
-              style: const EntryCardStyle(),
+              style: style,
               now: DateTime(2026, 10, 29),
               locale: 'en',
             ),
           ),
         ));
 
-    testWidgets('shows "Rewatched ×N" when N > 0', (tester) async {
+    testWidgets('shows "Rewatched ×N" on status tabs and compact "×N" when status pill is shown',
+        (tester) async {
       await pumpRow(tester, _anime(1, rewatched: 2));
       expect(find.text('Rewatched ×2'), findsOneWidget);
+
+      await pumpRow(
+        tester,
+        _anime(1, rewatched: 2),
+        style: const EntryCardStyle(showStatus: true),
+      );
+      expect(find.text('×2'), findsOneWidget);
+      expect(find.bySemanticsLabel('Rewatched ×2'), findsOneWidget);
+
+      await pumpRow(
+        tester,
+        _anime(1, status: ListEntryStatus.completed, rewatched: 2),
+        style: const EntryCardStyle(showStatus: true),
+      );
+      expect(find.text('Completed'), findsOneWidget);
+      expect(find.byIcon(Icons.replay_rounded), findsOneWidget);
+      expect(find.text('×2'), findsOneWidget);
     });
 
     testWidgets('shows nothing when never rewatched', (tester) async {
