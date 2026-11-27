@@ -267,18 +267,22 @@ void main() {
       await tester.pumpWidget(_app(Builder(
         builder: (context) => genresWidget(
           [
+            Genre(id: 28, name: 'BL'),
             Genre(id: 8, name: 'Drama'),
-            Genre(id: 1, name: 'Action'),
           ],
           'anime',
           context,
         ),
       )));
-      final dramaRect = tester.getRect(find.ancestor(
-        of: find.text('Drama'),
+      expect(find.byType(TextButton), findsNothing);
+      final blTextRect = tester.getRect(find.text('BL'));
+      final blInkRect = tester.getRect(find.ancestor(
+        of: find.text('BL'),
         matching: find.byType(InkWell),
       ));
-      expect(dramaRect.width, lessThan(60));
+      // Tight horizontal padding (4px each side) with no 64px Material button floor.
+      expect(blInkRect.width, closeTo(blTextRect.width + 8, 0.5));
+      expect(blInkRect.width, lessThan(48));
     });
   });
 
