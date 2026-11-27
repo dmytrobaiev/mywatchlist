@@ -280,8 +280,8 @@ void main() {
         of: find.text('BL'),
         matching: find.byType(InkWell),
       ));
-      // Tight horizontal padding (4px each side) with no 64px Material button floor.
-      expect(blInkRect.width, closeTo(blTextRect.width + 8, 0.5));
+      // Tight horizontal padding (6px each side) with no 64px Material button floor.
+      expect(blInkRect.width, closeTo(blTextRect.width + 12, 0.5));
       expect(blInkRect.width, lessThan(48));
     });
   });
