@@ -142,16 +142,11 @@ class _WeeklyScheduleScreenState extends State<WeeklyScheduleScreen>
               ),
       ),
       body: _failed
-          ? Padding(
-              padding: const EdgeInsets.only(top: 48),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: SectionMessage(
-                  icon: Icons.cloud_off_rounded,
-                  text: S.current.Wk_Failed,
-                  onRetry: () => _load(force: true),
-                ),
-              ),
+          ? SectionMessage(
+              icon: Icons.cloud_off_rounded,
+              text: S.current.Wk_Failed,
+              onRetry: () => _load(force: true),
+              centered: true,
             )
           : days == null
               ? _skeleton(context)
@@ -232,13 +227,12 @@ class _DayList extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           if (entries.isEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 40),
-                child: SectionMessage(
-                  icon: filtered ? Icons.filter_alt_off_rounded : Icons.inbox_outlined,
-                  text: filtered ? S.current.Seasonal_No_Match : S.current.No_Content,
-                ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: SectionMessage(
+                icon: filtered ? Icons.filter_alt_off_rounded : Icons.inbox_outlined,
+                text: filtered ? S.current.Seasonal_No_Match : S.current.No_Content,
+                centered: true,
               ),
             )
           else if (display.isGrid)

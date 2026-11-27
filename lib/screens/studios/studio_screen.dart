@@ -1,4 +1,7 @@
+import 'dart:ui' as ui show ImageByteFormat;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle, Uint8List;
 import 'package:mywatchlist/constants/constants.dart' show gotoPage;
 import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/search/general_search_screen.dart';
@@ -33,6 +36,41 @@ enum _Sort { score, members, newest, title }
 /// How the studio's anime are laid out.
 enum StudioAnimeDisplay { grid3, grid2, list }
 
+/// Computes the average relative luminance (0..1) of the top [topFraction]
+/// region of RGBA pixels (`width` x `height`), composited over [backdrop].
+@visibleForTesting
+double studioTopLuminance(
+  Uint8List rgba,
+  int width,
+  int height, {
+  double topFraction = 0.28,
+  Color backdrop = Colors.white,
+}) {
+  if (width <= 0 || height <= 0 || rgba.length < width * height * 4) {
+    return backdrop.computeLuminance();
+  }
+  final rows = (height * topFraction).ceil().clamp(1, height);
+  final stepX = width > 64 ? width ~/ 64 : 1;
+  final stepY = rows > 24 ? rows ~/ 24 : 1;
+  final bgR = backdrop.r * 255.0;
+  final bgG = backdrop.g * 255.0;
+  final bgB = backdrop.b * 255.0;
+  var sum = 0.0;
+  var count = 0;
+  for (var y = 0; y < rows; y += stepY) {
+    for (var x = 0; x < width; x += stepX) {
+      final i = (y * width + x) * 4;
+      final a = rgba[i + 3] / 255.0;
+      final r = rgba[i] * a + bgR * (1 - a);
+      final g = rgba[i + 1] * a + bgG * (1 - a);
+      final b = rgba[i + 2] * a + bgB * (1 - a);
+      sum += Color.fromARGB(255, r.round(), g.round(), b.round()).computeLuminance();
+      count++;
+    }
+  }
+  return count == 0 ? backdrop.computeLuminance() : sum / count;
+}
+
 class _StudioScreenState extends State<StudioScreen> {
   late Future<StudioPage> _page = StudioPages.of(widget.id);
   StudioAnimeType? _type;
@@ -40,6 +78,10 @@ class _StudioScreenState extends State<StudioScreen> {
   bool _aboutOpen = false;
   StudioAnimeDisplay _display = StudioAnimeDisplay.grid3;
   bool _collapsed = false;
+  bool _lightHeaderBg = true;
+  String? _sampledLogoUrl;
+  ImageStream? _logoStream;
+  ImageStreamListener? _logoListener;
 
   static const String _displayKey = 'studio_anime_display_v1';
 
@@ -47,6 +89,61 @@ class _StudioScreenState extends State<StudioScreen> {
   void initState() {
     super.initState();
     _loadDisplay();
+  }
+
+  @override
+  void dispose() {
+    _detachLogoStream();
+    super.dispose();
+  }
+
+  void _detachLogoStream() {
+    if (_logoStream != null && _logoListener != null) {
+      _logoStream!.removeListener(_logoListener!);
+    }
+    _logoStream = null;
+    _logoListener = null;
+  }
+
+  void _scheduleSampleLogo(String? url) {
+    if (url == null || url.isEmpty) {
+      if (_sampledLogoUrl != null) {
+        _sampledLogoUrl = null;
+        _detachLogoStream();
+        if (!_lightHeaderBg) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_lightHeaderBg) setState(() => _lightHeaderBg = true);
+          });
+        }
+      }
+      return;
+    }
+    if (url == _sampledLogoUrl) return;
+    _sampledLogoUrl = url;
+    _detachLogoStream();
+    final provider = AppImage.provider(url, width: 120, height: 120, dpr: 1);
+    final stream = provider.resolve(ImageConfiguration.empty);
+    final listener = ImageStreamListener(
+      (info, _) async {
+        try {
+          final data = await info.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+          if (data == null || !mounted || _sampledLogoUrl != url) return;
+          final lum = studioTopLuminance(
+            data.buffer.asUint8List(),
+            info.image.width,
+            info.image.height,
+          );
+          final isLight = lum >= 0.5;
+          if (isLight != _lightHeaderBg) {
+            setState(() => _lightHeaderBg = isLight);
+          }
+        } catch (_) {}
+      },
+      onError: (_, __) {},
+    );
+    _logoStream = stream;
+    _logoListener = listener;
+    stream.addListener(listener);
   }
 
   Future<void> _loadDisplay() async {
@@ -115,6 +212,8 @@ class _StudioScreenState extends State<StudioScreen> {
         builder: (context, snapshot) {
           final page = snapshot.data;
           final logo = page?.logo ?? widget.logo;
+          _scheduleSampleLogo(logo);
+          final expandedIconColor = _lightHeaderBg ? Colors.black87 : Colors.white;
           return NotificationListener<ScrollNotification>(
             onNotification: _onScroll,
             child: CustomScrollView(
@@ -122,8 +221,13 @@ class _StudioScreenState extends State<StudioScreen> {
                 SliverAppBar(
                   pinned: true,
                   expandedHeight: _headerHeight(context),
-                  iconTheme: _collapsed ? null : const IconThemeData(color: Colors.white),
-                  actionsIconTheme: _collapsed ? null : const IconThemeData(color: Colors.white),
+                  systemOverlayStyle: _collapsed
+                      ? null
+                      : (_lightHeaderBg
+                          ? SystemUiOverlayStyle.dark
+                          : SystemUiOverlayStyle.light),
+                  iconTheme: _collapsed ? null : IconThemeData(color: expandedIconColor),
+                  actionsIconTheme: _collapsed ? null : IconThemeData(color: expandedIconColor),
                   // The name shows once the logo has scrolled away.
                   title: AnimatedOpacity(
                     opacity: _collapsed ? 1 : 0,
@@ -312,8 +416,8 @@ class _StudioScreenState extends State<StudioScreen> {
   }
 }
 
-/// The logo across the screen's width on white (MAL's logos are drawn for a white page), a
-/// shade at the top for the back and search buttons. A tap shows it alone.
+/// The logo across the screen's width on white (MAL's logos are drawn for a white page).
+/// A tap opens the logo in full-screen preview.
 class _Header extends StatelessWidget {
   const _Header({required this.name, this.logo});
 
@@ -345,19 +449,6 @@ class _Header extends StatelessWidget {
                     label: name,
                     child: AppImage(url: url, fit: BoxFit.contain),
                   ),
-          ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: Container(
-              height: top + 24,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xB8000000), Color(0x00000000)],
-                ),
-              ),
-            ),
           ),
         ],
       ),

@@ -45,5 +45,6 @@
     }
   },
   "Shell_Back_Again_To_Exit": "Press Back again to exit",
-  "Sidebar_Add_Account": "Add an account"
+  "Sidebar_Add_Account": "Add an account",
+  "Sidebar_Settings_Desc": "Customize your sidebar"
 }

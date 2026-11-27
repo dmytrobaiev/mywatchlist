@@ -387,14 +387,13 @@ class _SeasonalScreenState extends State<SeasonalScreen> with SingleTickerProvid
   List<Widget> _body(BuildContext context) {
     if (_failed) {
       return [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 48),
-            child: SectionMessage(
-              icon: Icons.cloud_off_rounded,
-              text: S.current.Seasonal_Failed,
-              onRetry: () => _openSeason(_season, force: true),
-            ),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: SectionMessage(
+            icon: Icons.cloud_off_rounded,
+            text: S.current.Seasonal_Failed,
+            onRetry: () => _openSeason(_season, force: true),
+            centered: true,
           ),
         ),
       ];
@@ -402,10 +401,12 @@ class _SeasonalScreenState extends State<SeasonalScreen> with SingleTickerProvid
     if (_entries == null) return [_skeleton()];
     if (_entries!.isEmpty) {
       return [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 48),
-            child: SectionMessage(icon: Icons.inbox_outlined, text: S.current.Seasonal_Empty),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: SectionMessage(
+            icon: Icons.inbox_outlined,
+            text: S.current.Seasonal_Empty,
+            centered: true,
           ),
         ),
       ];
@@ -418,15 +419,23 @@ class _SeasonalScreenState extends State<SeasonalScreen> with SingleTickerProvid
     return [
       if (_continuing.isNotEmpty) _groupChips() else const SliverToBoxAdapter(child: SizedBox(height: 4)),
       if (visible.isEmpty)
-        SliverToBoxAdapter(
-          child: Column(
-            children: [
-              SectionMessage(icon: Icons.filter_alt_off_rounded, text: S.current.Seasonal_No_Match),
-              TextButton(
-                onPressed: _clearFilters,
-                child: Text(S.current.Seasonal_Clear_Filters),
-              ),
-            ],
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SectionMessage(
+                  icon: Icons.filter_alt_off_rounded,
+                  text: S.current.Seasonal_No_Match,
+                  centered: true,
+                ),
+                TextButton(
+                  onPressed: _clearFilters,
+                  child: Text(S.current.Seasonal_Clear_Filters),
+                ),
+              ],
+            ),
           ),
         )
       else if (display.isGrid)

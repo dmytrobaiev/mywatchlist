@@ -150,11 +150,13 @@ class ListDisplay {
   final DisplaySubType subType;
   final int gridColumns;
   final double gridHeight;
+  final bool saveHeightPerLayout;
+  final Map<DisplaySubType, double> gridHeights;
   final String? cardProfileId;
 
   static const int minColumns = 2;
   static const int maxColumns = 6;
-  static const double minGridHeight = 160;
+  static const double minGridHeight = 100;
   static const double maxGridHeight = 360;
 
   const ListDisplay({
@@ -162,16 +164,53 @@ class ListDisplay {
     this.subType = DisplaySubType.comfortable,
     this.gridColumns = 3,
     this.gridHeight = 250,
+    this.saveHeightPerLayout = true,
+    this.gridHeights = const {},
     this.cardProfileId,
   });
 
   bool get isGrid => type == DisplayType.grid;
+
+  /// Effective grid card height for [forSubType] (defaults to [subType]).
+  double effectiveGridHeight([DisplaySubType? forSubType]) {
+    final target = forSubType ?? subType;
+    final raw = saveHeightPerLayout ? (gridHeights[target] ?? gridHeight) : gridHeight;
+    return raw.clamp(minGridHeight, maxGridHeight);
+  }
+
+  /// Updates the card height for the active grid layout (and saves it per layout
+  /// when [saveHeightPerLayout] is enabled).
+  ListDisplay withGridHeight(double height) {
+    final clamped = height.clamp(minGridHeight, maxGridHeight);
+    if (!saveHeightPerLayout) {
+      return copyWith(gridHeight: clamped);
+    }
+    return copyWith(
+      gridHeight: clamped,
+      gridHeights: {...gridHeights, subType: clamped},
+    );
+  }
+
+  /// Switches the active grid density, loading its saved height when
+  /// [saveHeightPerLayout] is enabled.
+  ListDisplay withSubType(DisplaySubType next, {bool clearCardProfile = false}) {
+    final nextHeight = saveHeightPerLayout
+        ? (gridHeights[next] ?? gridHeight).clamp(minGridHeight, maxGridHeight)
+        : gridHeight;
+    return copyWith(
+      subType: next,
+      gridHeight: nextHeight,
+      clearCardProfile: clearCardProfile,
+    );
+  }
 
   ListDisplay copyWith({
     DisplayType? type,
     DisplaySubType? subType,
     int? gridColumns,
     double? gridHeight,
+    bool? saveHeightPerLayout,
+    Map<DisplaySubType, double>? gridHeights,
     String? cardProfileId,
     bool clearCardProfile = false,
   }) =>
@@ -180,19 +219,26 @@ class ListDisplay {
         subType: subType ?? this.subType,
         gridColumns: gridColumns ?? this.gridColumns,
         gridHeight: gridHeight ?? this.gridHeight,
+        saveHeightPerLayout: saveHeightPerLayout ?? this.saveHeightPerLayout,
+        gridHeights: gridHeights ?? this.gridHeights,
         cardProfileId: clearCardProfile ? null : (cardProfileId ?? this.cardProfileId),
       );
 
   /// Same display with a sub type that exists for its type.
   ListDisplay normalized() {
     final allowed = subTypesFor(type);
-    var display = allowed.contains(subType) ? this : copyWith(subType: DisplaySubType.comfortable);
+    var display = allowed.contains(subType) ? this : withSubType(DisplaySubType.comfortable);
     if (display.subType != DisplaySubType.custom && display.cardProfileId != null) {
       display = display.copyWith(clearCardProfile: true);
     }
+    final cleanedHeights = <DisplaySubType, double>{
+      for (final e in display.gridHeights.entries)
+        e.key: e.value.clamp(minGridHeight, maxGridHeight),
+    };
     return display.copyWith(
       gridColumns: gridColumns.clamp(minColumns, maxColumns),
-      gridHeight: gridHeight.clamp(minGridHeight, maxGridHeight),
+      gridHeight: display.gridHeight.clamp(minGridHeight, maxGridHeight),
+      gridHeights: Map.unmodifiable(cleanedHeights),
     );
   }
 
@@ -210,6 +256,9 @@ class ListDisplay {
         'subType': subType.name,
         'gridColumns': gridColumns,
         'gridHeight': gridHeight,
+        'saveHeightPerLayout': saveHeightPerLayout,
+        if (gridHeights.isNotEmpty)
+          'gridHeights': {for (final e in gridHeights.entries) e.key.name: e.value},
         'cardProfileId': cardProfileId,
       };
 
@@ -222,6 +271,16 @@ class ListDisplay {
       return d;
     }
 
+    final rawHeights = json['gridHeights'];
+    final heights = <DisplaySubType, double>{};
+    if (rawHeights is Map) {
+      for (final entry in rawHeights.entries) {
+        final key = DisplaySubType.values.where((v) => v.name == entry.key).firstOrNull;
+        if (key != null && entry.value is num) {
+          heights[key] = (entry.value as num).toDouble();
+        }
+      }
+    }
     final type = pick(DisplayType.values, json['type'], fallback.type);
     return ListDisplay(
       type: type == DisplayType.list_horiz ? DisplayType.list_vert : type,
@@ -230,8 +289,20 @@ class ListDisplay {
       gridHeight: json['gridHeight'] is num
           ? (json['gridHeight'] as num).toDouble()
           : fallback.gridHeight,
+      saveHeightPerLayout: json['saveHeightPerLayout'] is bool
+          ? json['saveHeightPerLayout'] as bool
+          : fallback.saveHeightPerLayout,
+      gridHeights: heights,
       cardProfileId: json['cardProfileId'] is String ? json['cardProfileId'] as String : null,
     ).normalized();
+  }
+
+  static bool _sameHeights(Map<DisplaySubType, double> a, Map<DisplaySubType, double> b) {
+    if (a.length != b.length) return false;
+    for (final e in a.entries) {
+      if (b[e.key] != e.value) return false;
+    }
+    return true;
   }
 
   @override
@@ -241,10 +312,20 @@ class ListDisplay {
       other.subType == subType &&
       other.gridColumns == gridColumns &&
       other.gridHeight == gridHeight &&
+      other.saveHeightPerLayout == saveHeightPerLayout &&
+      _sameHeights(other.gridHeights, gridHeights) &&
       other.cardProfileId == cardProfileId;
 
   @override
-  int get hashCode => Object.hash(type, subType, gridColumns, gridHeight, cardProfileId);
+  int get hashCode => Object.hash(
+        type,
+        subType,
+        gridColumns,
+        gridHeight,
+        saveHeightPerLayout,
+        Object.hashAllUnordered(gridHeights.entries.map((e) => Object.hash(e.key, e.value))),
+        cardProfileId,
+      );
 }
 
 /// Sort, filter and display of one list.
@@ -718,7 +799,7 @@ class _DisplayTab extends StatelessWidget {
               ChoiceChip(
                 label: Text(_subTypeLabel(t)),
                 selected: display.subType == t,
-                onSelected: (_) => onChanged(display.copyWith(subType: t, clearCardProfile: true)),
+                onSelected: (_) => onChanged(display.withSubType(t, clearCardProfile: true)),
               ),
           ],
         ),
@@ -766,15 +847,28 @@ class _DisplayTab extends StatelessWidget {
             label: '${display.gridColumns}',
             onChanged: (v) => onChanged(display.copyWith(gridColumns: v.round())),
           ),
-          Text(S.current.UserList_Grid_Height(display.gridHeight.round()),
+          Text(S.current.UserList_Grid_Height(display.effectiveGridHeight().round()),
               style: theme.textTheme.titleSmall),
           Slider(
-            value: display.gridHeight,
+            value: display.effectiveGridHeight(),
             min: ListDisplay.minGridHeight,
             max: ListDisplay.maxGridHeight,
-            divisions: 20,
-            label: '${display.gridHeight.round()}',
-            onChanged: (v) => onChanged(display.copyWith(gridHeight: v)),
+            divisions: 26,
+            label: '${display.effectiveGridHeight().round()}',
+            onChanged: (v) => onChanged(display.withGridHeight(v)),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(S.current.UserList_Save_Height_Per_Layout),
+            subtitle: Text(
+              S.current.UserList_Save_Height_Per_Layout_Desc,
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            value: display.saveHeightPerLayout,
+            onChanged: (v) {
+              final next = display.copyWith(saveHeightPerLayout: v);
+              onChanged(v ? next.withGridHeight(display.effectiveGridHeight()) : next);
+            },
           ),
         ],
       ],

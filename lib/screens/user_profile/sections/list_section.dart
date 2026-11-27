@@ -289,7 +289,7 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
         SizedBox(
           height: _HeaderDelegate.rowHeight,
           child: Padding(
-            padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
+            padding: const EdgeInsetsDirectional.only(start: 10, end: 4),
             child: Row(
               children: [
                 SegmentedButton<String>(
@@ -299,9 +299,12 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
                   ],
                   selected: {_category},
                   showSelectedIcon: false,
-                  style: const ButtonStyle(
+                  style: ButtonStyle(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: WidgetStateProperty.all(
+                      const EdgeInsets.symmetric(horizontal: 10),
+                    ),
                   ),
                   onSelectionChanged: (v) => _select(category: v.first),
                 ),
@@ -310,6 +313,9 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
                   IconButton(
                     tooltip: s.Bulk_Select,
                     isSelected: _selection.active,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                     icon: const Icon(Icons.checklist_rounded),
                     selectedIcon: Icon(Icons.checklist_rounded,
                         color: Theme.of(context).colorScheme.primary),
@@ -325,6 +331,9 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
                   ),
                 IconButton(
                   tooltip: s.UserList_Sort,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   icon: Icon(settings.direction == SortDirection.ascending
                       ? Icons.arrow_upward_rounded
                       : Icons.sort_rounded),
@@ -332,6 +341,9 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
                 ),
                 IconButton(
                   tooltip: s.UserList_Filter,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: () => _openSheet(ListSortFilterTab.filter),
                   icon: Badge(
                     isLabelVisible: filterCount > 0,
@@ -343,6 +355,9 @@ class _ListSectionState extends State<ListSection> with AutomaticKeepAliveClient
                 ),
                 IconButton(
                   tooltip: s.UserList_Display,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: () => _openSheet(ListSortFilterTab.display),
                   icon: Icon(settings.display.isGrid
                       ? Icons.grid_view_rounded
@@ -592,6 +607,9 @@ class _CompareButton extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return IconButton(
       tooltip: s.Mlp_Compare,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
       onPressed: () => _pick(context),
       icon: Badge(
         isLabelVisible: value != _Compare.all,

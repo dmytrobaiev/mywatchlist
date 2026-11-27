@@ -245,8 +245,8 @@ class _MalForumPageState extends State<MalForumPage> with SingleTickerProviderSt
     final forums = _categories?.forums;
 
     if (_categoriesFailed) {
-      return SizedBox(
-        height: boardHeight,
+      return ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: boardHeight),
         child: ForumMessage.error(onRetry: _loadCategories, scrollable: false),
       );
     }

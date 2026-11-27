@@ -198,11 +198,14 @@ class _RecommSelectorNodes extends StatefulWidget {
 
 class _RecommSelectorNodesState extends State<_RecommSelectorNodes> {
   static const double tabWidth = 240.0;
+  int _activeIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    _activeIndex = widget.controller.index;
     widget.controller.addListener(_onTabChanged);
+    widget.controller.animation?.addListener(_onAnimationTick);
   }
 
   @override
@@ -210,24 +213,40 @@ class _RecommSelectorNodesState extends State<_RecommSelectorNodes> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onTabChanged);
+      oldWidget.controller.animation?.removeListener(_onAnimationTick);
+      _activeIndex = widget.controller.index;
       widget.controller.addListener(_onTabChanged);
+      widget.controller.animation?.addListener(_onAnimationTick);
     }
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onTabChanged);
+    widget.controller.animation?.removeListener(_onAnimationTick);
     super.dispose();
   }
 
   void _onTabChanged() {
-    if (mounted) setState(() {});
+    _updateActive(widget.controller.index);
+  }
+
+  void _onAnimationTick() {
+    final value = widget.controller.animation?.value;
+    if (value == null || widget.data.isEmpty) return;
+    _updateActive(value.round().clamp(0, widget.data.length - 1));
+  }
+
+  void _updateActive(int next) {
+    if (next != _activeIndex && mounted) {
+      setState(() => _activeIndex = next);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final double sidePadding = (screenWidth - tabWidth) / 2;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final double sidePadding = ((screenWidth - tabWidth) / 2 - 8).clamp(0.0, screenWidth);
 
     return SizedBox(
       height: 80,
@@ -237,17 +256,12 @@ class _RecommSelectorNodesState extends State<_RecommSelectorNodes> {
         indicatorColor: Colors.transparent,
         dividerColor: Colors.transparent,
         physics: const BouncingScrollPhysics(),
-        labelPadding: EdgeInsets.zero,
+        padding: EdgeInsets.symmetric(horizontal: sidePadding),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
         tabAlignment: TabAlignment.start,
         tabs: List.generate(
           widget.data.length,
-          (i) => Padding(
-            padding: EdgeInsets.only(
-              left: i == 0 ? sidePadding : 8,
-              right: i == widget.data.length - 1 ? sidePadding : 8,
-            ),
-            child: _buildSelectorNode(widget.data[i], i),
-          ),
+          (i) => _buildSelectorNode(widget.data[i], i),
         ),
       ),
     );
@@ -260,19 +274,13 @@ class _RecommSelectorNodesState extends State<_RecommSelectorNodes> {
         mainPic['large'] as String? ?? mainPic['medium'] as String? ?? '';
     final nodeTitle = node['title'] as String? ?? '';
     final nodeId = node['id'] as int?;
-    final isSelected = widget.controller.index == index;
+    final isSelected = _activeIndex == index;
 
     return SizedBox(
       width: tabWidth,
       child: RepaintBoundary(
         child: GestureDetector(
-          onTap: () {
-            if (mounted) {
-              setState(() {
-                widget.controller.index = index;
-              });
-            }
-          },
+          onTap: () => widget.controller.animateTo(index),
           child: Card(
             elevation: isSelected ? 4 : 0,
             shape: RoundedRectangleBorder(
@@ -294,6 +302,7 @@ class _RecommSelectorNodesState extends State<_RecommSelectorNodes> {
                       url: imageUrl,
                       height: 50,
                       width: 50,
+                      useUserImageOnError: false,
                       onTap: nodeId != null
                           ? () => gotoPage(
                                 context: context,

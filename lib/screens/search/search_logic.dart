@@ -5,23 +5,39 @@ extension _SearchLogic on _GeneralSearchScreenState {
   void _onTextChanged() {
     final text = _searchController.text;
     final prev = _lastQueryText;
-    // Backspace on an active `#...` special tag clears the entire tag at once.
-    final wasValidSpecial = _specialQuery &&
-        prev.startsWith('#') &&
-        SpecialQuery.parse(prev.substring(1)) != null;
-    if (wasValidSpecial && text.isNotEmpty && text.length < prev.length && prev.startsWith(text)) {
-      _lastQueryText = '';
-      _searchController.value = const TextEditingValue();
+    // Two-step backspace on an active `#...` special tag: `#favorite@manga`
+    // strips `@manga` first, and a second backspace clears `#favorite`.
+    final stepped = SpecialQuery.stepBackspace(
+      prev,
+      text,
+      wasSpecialTag: _specialQuery || _specialTagBackspace,
+    );
+    if (stepped != null) {
+      _lastQueryText = stepped;
+      _searchController.value = stepped.isEmpty
+          ? const TextEditingValue()
+          : TextEditingValue(
+              text: stepped,
+              selection: TextSelection.collapsed(offset: stepped.length),
+            );
+      final stillSpecial =
+          stepped.startsWith('#') && SpecialQuery.parse(stepped.substring(1)) != null;
       _set(() {
-        _specialQuery = false;
+        _specialQuery = stillSpecial;
+        _specialTagBackspace = stepped.startsWith('#');
         _filters = SearchFilters.empty;
       });
       if (_stage != SearchStage.notStarted) _resetResults();
-      _scheduleSuggestions('');
+      _scheduleSuggestions(stepped);
       return;
     }
     _lastQueryText = text;
     final special = text.startsWith('#') && SpecialQuery.parse(text.substring(1)) != null;
+    if (special) {
+      _specialTagBackspace = true;
+    } else if (!text.startsWith('#')) {
+      _specialTagBackspace = false;
+    }
     if (special != _specialQuery) _set(() => _specialQuery = special);
     if (text.isEmpty && _stage != SearchStage.notStarted) {
       _resetResults();
@@ -204,6 +220,8 @@ extension _SearchLogic on _GeneralSearchScreenState {
       ..displaySubType = result.display.subType
       ..gridAxisCount = result.display.gridColumns
       ..gridHeight = result.display.gridHeight
+      ..saveHeightPerLayout = result.display.saveHeightPerLayout
+      ..gridHeights = Map.of(result.display.gridHeights)
       ..saveDisplaySettings();
     final currentText = _searchController.text.trim();
     final currentPreset = _presetForQuery(currentText);
@@ -268,5 +286,40 @@ extension _SearchLogic on _GeneralSearchScreenState {
     _searchController.text = query;
     _searchController.selection = TextSelection.collapsed(offset: query.length);
     _runSearch(query);
+  }
+
+  /// Inserts [query] into the search field without submitting so the user can
+  /// edit it first (e.g. long-pressing a tag suggestion).
+  void _fillFrom(String query) {
+    _lastQueryText = query;
+    _searchController.value = TextEditingValue(
+      text: query,
+      selection: TextSelection.collapsed(offset: query.length),
+    );
+    final isSpecial = query.startsWith('#') && SpecialQuery.parse(query.substring(1)) != null;
+    _set(() {
+      _specialQuery = isSpecial;
+      _specialTagBackspace = query.startsWith('#');
+    });
+    _focusNode.requestFocus();
+    _scheduleSuggestions(query);
+  }
+
+  /// Filters News / Featured results by tapping a tag chip on an [ArticleTile].
+  void _applyArticleTag(String rawTag, {required bool isNews}) {
+    final clean = rawTag.trim();
+    if (clean.isEmpty) return;
+    final lower = clean.toLowerCase();
+    if (lower == 'all' || lower == 'spoiler') return;
+    final options = isNews ? SearchOptions.newsTags() : SearchOptions.featuredTags();
+    var resolved = clean;
+    for (final opt in options) {
+      if (opt.value.toLowerCase() == lower || opt.label.toLowerCase() == lower) {
+        resolved = opt.value;
+        break;
+      }
+    }
+    _set(() => _filters = _filters.set(FilterKey.tag, resolved));
+    _runSearch(_searchController.text);
   }
 }

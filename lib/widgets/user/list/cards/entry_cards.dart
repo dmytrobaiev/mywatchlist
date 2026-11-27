@@ -629,16 +629,18 @@ class GridCardBar extends StatelessWidget {
             children: [
               const SizedBox(width: 10),
               Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
+                child: LayoutBuilder(
+                  builder: (context, box) => Align(
                     alignment: AlignmentDirectional.centerStart,
-                    child: MeanScore(
-                      entry: entry,
-                      fontSize: 11.5,
-                      showMembers: true,
-                      dashWhenUnknown: true,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: MeanScore(
+                        entry: entry,
+                        fontSize: 11.5,
+                        showMembers: box.maxWidth >= 78,
+                        dashWhenUnknown: true,
+                      ),
                     ),
                   ),
                 ),

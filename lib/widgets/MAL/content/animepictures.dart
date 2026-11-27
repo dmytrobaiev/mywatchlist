@@ -20,7 +20,7 @@ class AnimePictures extends StatelessWidget {
           );
         },
         url: pictures[index].large,
-        // useUserImageOnError: false,
+        useUserImageOnError: false,
         radius: BorderRadius.circular(6),
         userRoundBorderforLoading: false,
       );

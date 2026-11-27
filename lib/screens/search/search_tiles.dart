@@ -583,12 +583,19 @@ class ClubTile extends StatelessWidget {
 class ArticleTile extends StatelessWidget {
   final AnimeNewsOrFeaturedItem item;
   final bool isNews;
+  final ValueChanged<String>? onTagTap;
 
-  const ArticleTile({super.key, required this.item, required this.isNews});
+  const ArticleTile({
+    super.key,
+    required this.item,
+    required this.isNews,
+    this.onTagTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final tags = item.tags.isEmpty
         ? const <String>[]
         : item.tags.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
@@ -632,17 +639,47 @@ class ArticleTile extends StatelessWidget {
                         child: Text(
                           item.text,
                           overflow: TextOverflow.fade,
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ),
                     ] else
                       const Spacer(),
                     if (tags.isNotEmpty)
-                      Text(
-                        tags.take(4).join('  ·  '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary),
+                      SizedBox(
+                        height: 24,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: tags.length > 4 ? 4 : tags.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 6),
+                          itemBuilder: (_, index) {
+                            final tag = tags[index];
+                            final chip = Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: scheme.secondaryContainer.withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                tag,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.onSecondaryContainer,
+                                ),
+                              ),
+                            );
+                            if (onTagTap == null) return chip;
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(999),
+                                onTap: () => onTagTap!(tag),
+                                child: chip,
+                              ),
+                            );
+                          },
+                        ),
                       ),
                   ],
                 ),

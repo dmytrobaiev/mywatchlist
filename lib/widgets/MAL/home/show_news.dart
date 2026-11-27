@@ -220,6 +220,19 @@ class _NewsCard extends StatelessWidget {
                 height: 240,
                 borderRadius: BorderRadius.circular(12),
                 placeholderColor: scheme.surfaceContainerHighest,
+                errorWidget: (_) => DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.image_outlined,
+                      size: 32,
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(

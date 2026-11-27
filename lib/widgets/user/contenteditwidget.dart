@@ -44,113 +44,12 @@ enum _Phase { loading, ready, failed, sessionExpired, notEditable }
 /// Edit sheet of the user's list entry (status, progress, score, rewatch,
 /// dates, priority, comments, tags, private note) for one anime or manga:
 /// one compact card like DailyAL's (status, episodes, score, delete), the
-/// rest behind "More options", including the "Other trackers" section when
+/// rest behind the swipe/tap handle, including the "Other trackers" section when
 /// a `CrossTrackerWidget` of the same entry is mounted next to it.
 ///
 /// The entry is loaded with every list field when the sheet opens, so each
 /// field is pre-filled exactly as on the tracker; [contentDetailed] is not
 /// needed for that and may be null.
-/// Draggable modal bottom sheet wrapper for [ContentEditWidget] (and
-/// [DetailEditPanel]). Replaces the fixed `ConstrainedBox` with a
-/// [DraggableScrollableSheet] that snaps between compact quick-edit height
-/// and expanded (`0.85`) height, driving a single scrollable via the sheet's
-/// [ScrollController] with keyboard bottom padding.
-class QuickEditModalSheet extends StatefulWidget {
-  final Widget Function(
-    BuildContext context,
-    ScrollController scrollController,
-    bool expanded,
-    ValueChanged<bool> onExpandedChanged,
-  ) builder;
-
-  const QuickEditModalSheet({super.key, required this.builder});
-
-  /// Convenience builder for a standalone [ContentEditWidget] inside one
-  /// scrollable driven by the sheet's [ScrollController].
-  factory QuickEditModalSheet.editor({
-    Key? key,
-    required Widget Function(
-      BuildContext context,
-      bool expanded,
-      ValueChanged<bool> onExpandedChanged,
-    ) editorBuilder,
-  }) =>
-      QuickEditModalSheet(
-        key: key,
-        builder: (context, scrollController, expanded, onExpandedChanged) =>
-            SingleChildScrollView(
-          controller: scrollController,
-          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-          child: editorBuilder(context, expanded, onExpandedChanged),
-        ),
-      );
-
-  @override
-  State<QuickEditModalSheet> createState() => _QuickEditModalSheetState();
-}
-
-class _QuickEditModalSheetState extends State<QuickEditModalSheet> {
-  static const double _maxSize = 0.85;
-  static const double _minSize = 0.25;
-
-  final DraggableScrollableController _controller = DraggableScrollableController();
-  bool _expanded = false;
-  double _compactSize = 0.45;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(_onSheetExtentChanged);
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_onSheetExtentChanged);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onSheetExtentChanged() {
-    if (!_controller.isAttached) return;
-    final midpoint = (_compactSize + _maxSize) / 2;
-    final shouldExpand = _controller.size >= midpoint;
-    if (shouldExpand != _expanded) {
-      setState(() => _expanded = shouldExpand);
-    }
-  }
-
-  void _setExpanded(bool open) {
-    if (_expanded != open) setState(() => _expanded = open);
-    if (!_controller.isAttached) return;
-    _controller.animateTo(
-      open ? _maxSize : _compactSize,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenH = MediaQuery.sizeOf(context).height;
-    _compactSize = screenH > 0 ? (380 / screenH).clamp(0.36, 0.58) : 0.45;
-    return DraggableScrollableSheet(
-      controller: _controller,
-      expand: false,
-      snap: true,
-      initialChildSize: _compactSize,
-      minChildSize: _minSize,
-      maxChildSize: _maxSize,
-      snapSizes: [_compactSize, _maxSize],
-      builder: (context, scrollController) => widget.builder(
-        context,
-        scrollController,
-        _expanded,
-        _setExpanded,
-      ),
-    );
-  }
-}
-
 class ContentEditWidget extends StatefulWidget {
   final int id;
   final MalAnime? contentDetailed;
@@ -164,14 +63,6 @@ class ContentEditWidget extends StatefulWidget {
 
   /// Closes the sheet or panel holding the editor.
   final VoidCallback? onDismiss;
-
-  /// Enables manual [EditSwipeArea] gesture handling (true for inline panels;
-  /// false inside [QuickEditModalSheet] so it does not fight the sheet drag).
-  final bool enableSwipe;
-
-  /// External expansion state synced with [QuickEditModalSheet].
-  final bool? expanded;
-  final ValueChanged<bool>? onExpandedChanged;
 
   /// Defaults to MyAnimeList; tests inject a fake.
   final ListEntryService? service;
@@ -187,9 +78,6 @@ class ContentEditWidget extends StatefulWidget {
     this.onListStatusChange,
     this.onDelete,
     this.onDismiss,
-    this.enableSwipe = true,
-    this.expanded,
-    this.onExpandedChanged,
     this.service,
     this.notesStore,
     this.clock,
@@ -268,9 +156,6 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   @override
   void didUpdateWidget(covariant ContentEditWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.expanded != null && widget.expanded != _advanced) {
-      _advanced = widget.expanded!;
-    }
     // The detail page refreshes [contentDetailed] after each write; the sheet
     // already holds the tracker's answer, so only another entry reloads.
     if (oldWidget.id != widget.id || oldWidget.category != widget.category) {
@@ -634,18 +519,11 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   }
 
   Widget _editor(EditableContent content, ListEntry entry) {
-    final column = _editorColumn(content, entry);
-    if (!widget.enableSwipe) {
-      return KeyedSubtree(
-        key: const ValueKey('edit-form'),
-        child: column,
-      );
-    }
     return EditSwipeArea(
       key: const ValueKey('edit-form'),
       expanded: _advanced,
       onSwipe: _onSwipe,
-      child: column,
+      child: _editorColumn(content, entry),
     );
   }
 
@@ -692,9 +570,7 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   }
 
   void _toggleAdvanced([bool? open]) {
-    final next = open ?? !_advanced;
-    setState(() => _advanced = next);
-    widget.onExpandedChanged?.call(next);
+    setState(() => _advanced = open ?? !_advanced);
   }
 
   Widget _handle() {
@@ -739,6 +615,7 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
     final useBar = canUseBar && _episodeBar;
     final toggle = canUseBar
         ? IconButton(
+            key: const ValueKey('edit-episode-layout-toggle'),
             visualDensity: VisualDensity.compact,
             tooltip: useBar
                 ? S.current.Edit_Type_Number
@@ -748,16 +625,14 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
                 size: 20),
           )
         : null;
-    final statusCaption = FieldCaption(S.current.Status, action: toggle);
-    final caption = FieldCaption(S.current.Edit_Episodes_Seen);
     if (useBar) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          statusCaption,
+          FieldCaption(S.current.Status, action: toggle),
           _statusButton(entry),
           const SizedBox(height: 8),
-          caption,
+          FieldCaption(S.current.Edit_Episodes_Seen),
           NumberBar(
             key: const ValueKey('edit-episode-bar'),
             first: 0,
@@ -778,7 +653,7 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [statusCaption, _statusButton(entry)],
+            children: [FieldCaption(S.current.Status), _statusButton(entry)],
           ),
         ),
         const SizedBox(width: 12),
@@ -786,7 +661,7 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              caption,
+              FieldCaption(S.current.Edit_Episodes_Seen, action: toggle),
               ProgressStepper(
                 key: const ValueKey('edit-progress'),
                 controller: _progressController,
@@ -1106,38 +981,29 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
     final scheme = Theme.of(context).colorScheme;
     final deleting = _busy.contains(EditField.delete);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 12, 12),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          TextButton.icon(
-            onPressed: _toggleAdvanced,
-            icon: AnimatedRotation(
-              turns: _advanced ? 0.5 : 0,
-              duration: const Duration(milliseconds: 200),
-              curve: editEaseOut,
-              child: const Icon(Icons.expand_less),
-            ),
-            label: Text(
-              _advanced
-                  ? S.current.Edit_Fewer_Options
-                  : S.current.Edit_More_Options,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: FilledButton.tonalIcon(
+          Tooltip(
+            message: S.current.Delete_from_List,
+            child: FilledButton.tonal(
+              key: const ValueKey('edit-delete'),
               style: FilledButton.styleFrom(
                 backgroundColor: scheme.errorContainer,
                 foregroundColor: scheme.onErrorContainer,
+                minimumSize: const Size(44, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 visualDensity: VisualDensity.compact,
               ),
               onPressed: deleting ? null : _delete,
-              icon: deleting
+              child: deleting
                   ? SmallSpinner(color: scheme.onErrorContainer)
-                  : const Icon(Icons.delete_outline, size: 18),
-              label: Text(S.current.Delete_from_List,
-                  overflow: TextOverflow.ellipsis),
+                  : Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      semanticLabel: S.current.Delete_from_List,
+                    ),
             ),
           ),
         ],

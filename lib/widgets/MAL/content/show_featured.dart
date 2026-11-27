@@ -160,6 +160,7 @@ class _ShowAnimeFeaturedState extends State<ShowAnimeFeatured>
         height: 110,
         width: double.infinity,
         url: article.imageUrl,
+        useUserImageOnError: false,
         radius: BorderRadius.zero,
         userRoundBorderforLoading: false,
       );

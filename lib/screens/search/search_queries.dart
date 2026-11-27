@@ -54,6 +54,24 @@ sealed class SpecialQuery {
 
   static String suggested(String category) => '#suggested@$category';
 
+  /// Computes the next query string when backspacing an active `#...` special
+  /// tag. Two-part tags like `#favorite@manga` strip `@manga` first (leaving
+  /// `#favorite`), and a subsequent backspace clears `#favorite` completely.
+  /// Returns `null` when the change is not a special-tag backspace.
+  static String? stepBackspace(
+    String prev,
+    String next, {
+    required bool wasSpecialTag,
+  }) {
+    if (!wasSpecialTag || !prev.startsWith('#') || prev.length <= 1) return null;
+    if (next.length >= prev.length || !prev.startsWith(next)) return null;
+    final atIndex = prev.lastIndexOf('@');
+    if (atIndex > 1) {
+      return prev.substring(0, atIndex);
+    }
+    return '';
+  }
+
   /// Matching `#...` preset suggestions for [raw] (used when tag suggestions
   /// are enabled in Settings).
   static List<({String query, String label})> suggestions(String raw, [DateTime? now]) {

@@ -29,7 +29,6 @@ import 'package:mywatchlist/widgets/MAL/content/media_platforms.dart' show Sched
 import 'package:mywatchlist/widgets/MAL/content/synopsis_widget.dart';
 import 'package:mywatchlist/widgets/common/slivers.dart';
 import 'package:mywatchlist/widgets/loading/shimmercolor.dart';
-import 'package:mywatchlist/widgets/user/contenteditwidget.dart' show QuickEditModalSheet;
 import 'package:scroll_to_index/scroll_to_index.dart';
 
 /// Anime / manga detail page (MyAnimeList data): collapsing header, tab bar
@@ -66,9 +65,6 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
   late final AutoScrollController _scroll = AutoScrollController(
     viewportBoundaryGetter: () => Rect.fromLTRB(0, _pinnedExtent, 0, 0),
   );
-
-  /// True once the page has scrolled past the header title so the pinned app bar shows it.
-  final ValueNotifier<bool> _showAppBarTitle = ValueNotifier(false);
 
   late DetailData _data;
   List<DetailSection> _sections = const [];
@@ -120,12 +116,10 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
   @override
   void dispose() {
     _scroll.removeListener(_onScroll);
-    _tabController.removeListener(_onTabControllerChange);
     _tabPrefSub?.cancel();
     _titlePrefSub?.cancel();
     _scroll.dispose();
     _tabController.dispose();
-    _showAppBarTitle.dispose();
     super.dispose();
   }
 
@@ -256,34 +250,13 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
         vsync: this,
         initialIndex: selected == null ? 0 : math.max(0, tabs.indexOf(selected)),
       );
-      _tabController.addListener(_onTabControllerChange);
       _tabTypes = tabs;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        old.removeListener(_onTabControllerChange);
-        old.dispose();
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     }
     for (final type in tabs) {
       _sectionKeys.putIfAbsent(type, () => GlobalKey(debugLabel: type.name));
     }
-    _syncAppBarTitle();
     setState(() => _sections = sections);
-  }
-
-  void _onTabControllerChange() => _syncAppBarTitle();
-
-  /// Shows the AppBar title when the navbar snaps to [TabType.Media] (or any
-  /// section at or after it; falls back to the second tab when Media is hidden).
-  void _syncAppBarTitle([int? tabIndex]) {
-    if (_tabTypes.isEmpty) {
-      if (_showAppBarTitle.value) _showAppBarTitle.value = false;
-      return;
-    }
-    final idx = tabIndex ?? _tabController.index;
-    final mediaIdx = _tabTypes.indexOf(TabType.Media);
-    final triggerIdx = mediaIdx >= 0 ? mediaIdx : 1;
-    final show = _tabTypes.length > triggerIdx && idx >= triggerIdx;
-    if (_showAppBarTitle.value != show) _showAppBarTitle.value = show;
   }
 
   void _onScroll() {
@@ -302,7 +275,6 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
       if (index != null && index != _tabController.index) {
         _tabController.index = index;
       }
-      _syncAppBarTitle();
     });
   }
 
@@ -343,7 +315,6 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
   /// the viewport, which is impossible while the header is expanded, so the
   /// page did not move.
   Future<void> _scrollToTab(int index) async {
-    _syncAppBarTitle(index);
     await _scroll.scrollToIndex(index, preferPosition: AutoScrollPosition.begin);
     // The tapped tab stays selected until the user scrolls again.
     if (!mounted || !_scroll.hasClients) return;
@@ -351,7 +322,6 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     if (_tabController.index != index && index < _tabController.length) {
       _tabController.index = index;
     }
-    _syncAppBarTitle(index);
   }
 
   @override
@@ -359,67 +329,61 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     _pinnedExtent = MediaQuery.paddingOf(context).top +
         DetailHeader.toolbarHeight +
         DetailHeader.tabBarHeight;
-    return Scaffold(
-      floatingActionButton: buildDetailFab(
-        data: _data,
-        editOpen: _showContentEdit,
-        onPressed: _toggleEdit,
-      ),
-      floatingActionButtonAnimator: NoScalingAnimation(),
-      body: CustomScrollView(
-        key: _listKey,
-        controller: _scroll,
-        slivers: [
-          _appBar(context),
-          _body(),
-          SliverWrapper(
-            SizedBox(height: 112 + MediaQuery.paddingOf(context).bottom),
-          ),
-        ],
+    return PopScope(
+      canPop: !_showContentEdit,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _showContentEdit) _toggleEdit();
+      },
+      child: Scaffold(
+        floatingActionButtonLocation:
+            _showContentEdit ? FloatingActionButtonLocation.endFloat : null,
+        floatingActionButton: buildDetailFab(
+          data: _data,
+          editOpen: _showContentEdit,
+          onPressed: _toggleEdit,
+        ),
+        floatingActionButtonAnimator: NoScalingAnimation(),
+        body: Stack(
+          children: [
+            CustomScrollView(
+              key: _listKey,
+              controller: _scroll,
+              slivers: [
+                _appBar(context),
+                _body(),
+                SliverWrapper(
+                  SizedBox(height: 112 + MediaQuery.paddingOf(context).bottom),
+                ),
+              ],
+            ),
+            if (_showContentEdit && _data.hasContent)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 70,
+                child: DetailEditPanel(
+                  data: _data,
+                  showCrossTracker: _crossTrackerEnabled && _hasOtherTrackers,
+                  live: _liveStatus,
+                  onUpdate: (success) {
+                    if (success) _loadMal();
+                  },
+                  onLiveStatus: (live) => setState(() => _liveStatus = live),
+                  onDelete: () {
+                    setState(() => _showContentEdit = false);
+                    _loadMal();
+                  },
+                  onClose: () => setState(() => _showContentEdit = false),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> _toggleEdit() async {
-    if (!mounted || !_data.hasContent) return;
-    if (_showContentEdit) {
-      Navigator.of(context).maybePop();
-      return;
-    }
-    setState(() => _showContentEdit = true);
-    try {
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: false,
-        builder: (sheetContext) => QuickEditModalSheet(
-          builder: (context, scrollController, expanded, onExpandedChanged) =>
-              DetailEditPanel(
-            data: _data,
-            showCrossTracker: _crossTrackerEnabled && _hasOtherTrackers,
-            live: _liveStatus,
-            scrollController: scrollController,
-            enableSwipe: false,
-            expanded: expanded,
-            onExpandedChanged: onExpandedChanged,
-            onUpdate: (success) {
-              if (success) _loadMal();
-            },
-            onLiveStatus: (live) {
-              if (mounted) setState(() => _liveStatus = live);
-            },
-            onDelete: () {
-              Navigator.of(sheetContext).pop();
-              if (mounted) _loadMal();
-            },
-            onClose: () => Navigator.of(sheetContext).pop(),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _showContentEdit = false);
-    }
+  void _toggleEdit() {
+    if (mounted) setState(() => _showContentEdit = !_showContentEdit);
   }
 
   SliverAppBar _appBar(BuildContext context) {
@@ -433,15 +397,7 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
         countdown: countdown,
       ),
       toolbarHeight: DetailHeader.toolbarHeight,
-      title: ValueListenableBuilder<bool>(
-        valueListenable: _showAppBarTitle,
-        builder: (context, show, child) => AnimatedOpacity(
-          opacity: show ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 180),
-          child: child,
-        ),
-        child: Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      ),
+      title: DetailCollapsedTitle(title: _title),
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.pin,
         background: ShimmerConditionally(
@@ -485,8 +441,11 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
   Widget _body() {
     if (!_data.hasContent) {
       if (_data.state == DetailLoadState.failed) {
-        return SliverToBoxAdapter(
-          child: DetailErrorView(error: _data.error, onRetry: _retry),
+        return SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: DetailErrorView(error: _data.error, onRetry: _retry),
+          ),
         );
       }
       return const SliverWrapper(SysonpsisWidget());
@@ -507,6 +466,28 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
       controller: _scroll,
       index: _tabTypes.indexOf(section.type),
       child: KeyedSubtree(key: _sectionKeys[section.type], child: frame),
+    );
+  }
+}
+
+/// Fades the detail title into the pinned AppBar as soon as the collapsing
+/// header snaps down to the tab bar (regardless of which tab is active).
+@visibleForTesting
+class DetailCollapsedTitle extends StatelessWidget {
+  final String title;
+
+  const DetailCollapsedTitle({super.key, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    final settings =
+        context.dependOnInheritedWidgetOfExactType<FlexibleSpaceBarSettings>();
+    final collapsed =
+        settings != null && settings.currentExtent <= settings.minExtent + 12.0;
+    return AnimatedOpacity(
+      opacity: collapsed ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 180),
+      child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
   }
 }

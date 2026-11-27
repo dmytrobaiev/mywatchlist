@@ -30,5 +30,6 @@
   "Sidebar_Background_Edit": "Changer le fond",
   "Sidebar_Version": "Version {version}",
   "Shell_Back_Again_To_Exit": "Appuyez de nouveau sur Retour pour quitter",
-  "Sidebar_Add_Account": "Ajouter un compte"
+  "Sidebar_Add_Account": "Ajouter un compte",
+  "Sidebar_Settings_Desc": "Personnaliser votre barre latérale"
 }

@@ -229,11 +229,12 @@ Map<String, dynamic> parseMalPersonPage(String body) {
   final content = document.querySelector('#content') ?? document.body;
   final buffer = StringBuffer();
   final more = content?.querySelector('div.people-informantion-more');
-  if (more != null) _writeText(more, buffer);
+  if (more != null) _writeText(more, buffer, preserveLinks: true);
   return {
     'name': _name(document, null),
     'given_name': _labelled(content, 'Given name:'),
     'family_name': _labelled(content, 'Family name:'),
+    'website_url': _labelledHref(content, 'Website:'),
     'about': _cleanBlock(buffer.toString()),
     'favorites': _favoriteCount(content),
     'images': _images(_portrait(content)),
@@ -247,6 +248,31 @@ Map<String, dynamic> parseMalPersonPage(String body) {
         {'position': work.subtitle, 'manga': work.node},
     ],
   };
+}
+
+/// The first valid HTTP(S) `href` after a `span.dark_text` label (e.g. `Website:`).
+String? _labelledHref(Element? content, String label) {
+  for (final span in content?.querySelectorAll('span.dark_text') ??
+      const <Element>[]) {
+    if (_text(span) != label) continue;
+    final siblings = span.parent?.nodes ?? const <Node>[];
+    for (var i = siblings.indexOf(span) + 1; i > 0 && i < siblings.length; i++) {
+      final node = siblings[i];
+      if (node is Element &&
+          (node.localName == 'div' || node.classes.contains('dark_text'))) {
+        break;
+      }
+      if (node is Element && node.localName == 'a') {
+        final href = (node.attributes['href'] ?? '').trim();
+        if ((href.startsWith('http://') || href.startsWith('https://')) &&
+            href != 'http://' &&
+            href != 'https://') {
+          return href;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 /// The value after a `span.dark_text` label of the person's side column.
@@ -398,7 +424,7 @@ String? _imageUrl(Element? img) {
 /// Text of [node] with `br` and list items as line breaks; scripts, styles
 /// and buttons (the spoiler toggle) skipped, and `.spoiler` blocks wrapped in
 /// `[Spoiler]...[/Spoiler]` tags so the UI renders collapsible spoiler cards.
-void _writeText(Node node, StringBuffer out) {
+void _writeText(Node node, StringBuffer out, {bool preserveLinks = false}) {
   if (node is Text) {
     out.write(node.text.replaceAll(RegExp(r'\s+'), ' '));
     return;
@@ -408,13 +434,27 @@ void _writeText(Node node, StringBuffer out) {
     final content = node.querySelector('.spoiler_content') ?? node;
     final inner = StringBuffer();
     for (final child in content.nodes) {
-      _writeText(child, inner);
+      _writeText(child, inner, preserveLinks: preserveLinks);
     }
     final text = _cleanBlock(inner.toString());
     if (text.isNotEmpty) {
       out.write('\n[Spoiler]\n$text\n[/Spoiler]\n');
     }
     return;
+  }
+  if (preserveLinks && node.localName == 'a') {
+    final href = (node.attributes['href'] ?? '').trim();
+    final label = _text(node);
+    if ((href.startsWith('http://') || href.startsWith('https://')) &&
+        href != 'http://' &&
+        href != 'https://') {
+      if (label.isNotEmpty && label != href) {
+        out.write('[$label]($href)');
+      } else {
+        out.write(href);
+      }
+      return;
+    }
   }
   switch (node.localName) {
     case 'script' || 'style' || 'noscript' || 'input' || 'button':
@@ -426,7 +466,7 @@ void _writeText(Node node, StringBuffer out) {
       out.write('\n');
   }
   for (final child in node.nodes) {
-    _writeText(child, out);
+    _writeText(child, out, preserveLinks: preserveLinks);
   }
 }
 

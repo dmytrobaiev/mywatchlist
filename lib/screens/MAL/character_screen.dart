@@ -12,7 +12,6 @@ import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/MAL/contentdetailedscreen.dart';
 import 'package:mywatchlist/screens/MAL/detail/sections/section_states.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_client.dart';
-import 'package:mywatchlist/services/api/Jikan/jikan_fallbacks.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_json.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/character_page.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
@@ -61,6 +60,7 @@ class _Profile {
   final String name;
   final String alternateName;
   final String about;
+  final String? websiteUrl;
   final int? favorites;
   final String? image;
   final List<_Section> sections;
@@ -73,6 +73,7 @@ class _Profile {
     required this.name,
     required this.alternateName,
     required this.about,
+    this.websiteUrl,
     required this.favorites,
     required this.image,
     required this.sections,
@@ -249,10 +250,18 @@ _Profile _profileFromData(Map<String, dynamic> data, bool isCharacter) {
       if (id != null && fav != null) roleFavorites.putIfAbsent(id, () => fav);
     }
   }
+  final rawWebsite = jikanStr(data['website_url'] ?? data['websiteUrl'] ?? data['website']);
+  final websiteUrl = (rawWebsite != null &&
+          (rawWebsite.startsWith('http://') || rawWebsite.startsWith('https://')) &&
+          rawWebsite != 'http://' &&
+          rawWebsite != 'https://')
+      ? rawWebsite
+      : null;
   return _Profile(
     name: name,
     alternateName: alternate,
     about: ((data['about'] as String?) ?? '').trim(),
+    websiteUrl: websiteUrl,
     favorites: jikanInt(data['favorites']),
     image: _jpg(data['images'], fallbackImageUrl: jikanStr(data['imageUrl'] ?? data['image_url'])),
     sections: sections,
@@ -283,9 +292,9 @@ final Map<int, int> _favoritesCache = {};
 ///
 /// Pass [category] = `'character'` (default) for characters, or `'person'`
 /// for voice actors / staff members. The page is a MyAnimeList screen whatever
-/// tracker is active: the data comes from Jikan by MAL id, raced against
-/// MyAnimeList's own page ([MalCharacterPage], see [JikanFallbacks.race]:
-/// Jikan gets a 3 s head start and the load ends within about 12 s).
+/// tracker is active: it prefers MyAnimeList's own page ([MalCharacterPage])
+/// so character spoilers and person external links stay intact, falling back
+/// to Jikan by MAL id.
 class CharacterScreen extends StatefulWidget {
   final int id;
   final String category;
@@ -366,23 +375,13 @@ class _CharacterScreenState extends State<CharacterScreen> {
       });
     }
     try {
-      // For character pages, jikan-edge strips `<div class="spoiler">` wrappers
-      // and truncates trailing spoilers at `<div`. Prefer MAL's own page so
-      // collapsible `[Spoiler]` blocks remain intact, falling back to Jikan.
-      final _Profile profile;
-      if (_isCharacter) {
-        _Profile? malProfile;
-        try {
-          malProfile = await _fromMal();
-        } catch (_) {}
-        profile = malProfile ?? await _fromJikan();
-      } else {
-        final result = await JikanFallbacks.race<_Profile>(
-          jikan: _fromJikan,
-          fallback: _fromMal,
-        );
-        profile = result.value;
-      }
+      // Prefer MAL's own page so character spoiler wrappers AND person
+      // external `<a href>` / `Website:` links remain intact, falling back to Jikan.
+      _Profile? malProfile;
+      try {
+        malProfile = await _fromMal();
+      } catch (_) {}
+      final profile = malProfile ?? await _fromJikan();
       _favoritesCache.addAll(profile.roleFavorites);
       if (!mounted) return;
       setState(() {
@@ -640,10 +639,29 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   List<Widget> _aboutSlivers(_Profile profile) {
     final style = Theme.of(context).textTheme.bodyLarge;
+    final website = profile.websiteUrl;
     final encodedForTranslation = profile.about
         .replaceAll(RegExp(r'\[Spoiler\]', caseSensitive: false), '<<<S>>>')
         .replaceAll(RegExp(r'\[/Spoiler\]', caseSensitive: false), '<<<E>>>');
     return [
+      if (website != null && website.isNotEmpty)
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          sliver: SliverToBoxAdapter(
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: ActionChip(
+                avatar: const Icon(Icons.language_rounded, size: 18),
+                label: Text(
+                  Uri.tryParse(website)?.host.replaceFirst('www.', '') ?? website,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onPressed: () => openLink(context, website),
+              ),
+            ),
+          ),
+        ),
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
         sliver: SliverToBoxAdapter(
@@ -1324,7 +1342,7 @@ class _SpoilerBlock extends StatelessWidget {
 }
 
 final RegExp _aboutLinkRe = RegExp(
-  r'(https?://[^\s)\]]+)|((?:Twitter|X|Instagram|TikTok|YouTube)\s*:\s*)(@[A-Za-z0-9_.-]+(?:[ \t]*,[ \t\r\n]*@[A-Za-z0-9_.-]+)*)',
+  r'\[([^\]]+)\]\((https?://[^\s)]+)\)|(https?://[^\s)\]]+)|((?:Twitter|X|Instagram|TikTok|YouTube)(?:\s*\([^)]*\))?\s*:\s*)(@[A-Za-z0-9_.-]+(?:[ \t]*,[ \t\r\n]*@[A-Za-z0-9_.-]+)*)',
   caseSensitive: false,
 );
 final RegExp _singleAtHandleRe = RegExp(r'@([A-Za-z0-9_.-]+)');
@@ -1342,8 +1360,9 @@ String socialHandleUrl(String platformLabel, String handle) {
   return 'https://x.com/$handle';
 }
 
-/// Tokenizes [text] into plain segments and clickable links (URLs plus single or
-/// comma-separated `Twitter/X/Instagram/TikTok/YouTube: @handle` mentions).
+/// Tokenizes [text] into plain segments and clickable links (`[label](url)` links,
+/// bare URLs, plus single or comma-separated social handle mentions such as
+/// `X (Music): @handle`).
 List<({String text, String? url})> parseAboutLinks(String text) {
   final cleaned = sanitizeAboutText(text);
   final out = <({String text, String? url})>[];
@@ -1352,12 +1371,16 @@ List<({String text, String? url})> parseAboutLinks(String text) {
     if (match.start > cursor) {
       out.add((text: cleaned.substring(cursor, match.start), url: null));
     }
-    final fullUrl = match.group(1);
-    if (fullUrl != null) {
+    final mdLabel = match.group(1);
+    final mdUrl = match.group(2);
+    final fullUrl = match.group(3);
+    if (mdLabel != null && mdUrl != null) {
+      out.add((text: mdLabel, url: mdUrl));
+    } else if (fullUrl != null) {
       out.add((text: fullUrl, url: fullUrl));
     } else {
-      final prefix = match.group(2) ?? '';
-      final handlesPart = match.group(3) ?? '';
+      final prefix = match.group(4) ?? '';
+      final handlesPart = match.group(5) ?? '';
       if (prefix.isNotEmpty) out.add((text: prefix, url: null));
       var subCursor = 0;
       for (final hMatch in _singleAtHandleRe.allMatches(handlesPart)) {

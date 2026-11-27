@@ -110,7 +110,7 @@ Future<PreferencesBloc> _prefsBloc(
 }
 
 Future<void> _openAdvanced(WidgetTester tester) async {
-  await tester.tap(find.text('More options'));
+  await tester.tap(find.byKey(const ValueKey('edit-handle')));
   await tester.pumpAndSettle();
 }
 
@@ -289,7 +289,7 @@ void main() {
   testWidgets('the sheet is fully French in French', (tester) async {
     final service = _FakeService(completedAnimeJson(), isAnime: true);
     await _pump(tester, service, locale: const Locale('fr', 'FR'));
-    await tester.tap(find.text('Plus d’options'));
+    await tester.tap(find.byKey(const ValueKey('edit-handle')));
     await tester.pumpAndSettle();
     expect(find.text('Terminé'), findsOneWidget);
     expect(find.text('sur 64'), findsNothing);

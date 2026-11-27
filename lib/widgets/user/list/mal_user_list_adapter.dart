@@ -256,23 +256,24 @@ class MalUserListAdapter extends UserListAdapter {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: false,
-      builder: (sheetContext) => QuickEditModalSheet.editor(
-        editorBuilder: (context, expanded, onExpandedChanged) => ContentEditWidget(
-          onDismiss: () => Navigator.pop(sheetContext),
-          id: entry.id,
-          category: entry.category,
-          service: _entryService,
-          enableSwipe: false,
-          expanded: expanded,
-          onExpandedChanged: onExpandedChanged,
-          onListStatusChange: (status) {
-            last = status;
-            removed = false;
-          },
-          onDelete: () {
-            removed = true;
-            last = null;
-          },
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: ContentEditWidget(
+            onDismiss: () => Navigator.pop(sheetContext),
+            id: entry.id,
+            category: entry.category,
+            service: _entryService,
+            onListStatusChange: (status) {
+              last = status;
+              removed = false;
+            },
+            onDelete: () {
+              removed = true;
+              last = null;
+            },
+          ),
         ),
       ),
     );

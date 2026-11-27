@@ -1238,19 +1238,24 @@ Future<void> showContentEditSheet(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: false,
-    builder: (sheetContext) => QuickEditModalSheet.editor(
-      editorBuilder: (context, expanded, onExpandedChanged) => ContentEditWidget(
-        onDismiss: () => Navigator.pop(sheetContext),
-        id: node.id,
-        category: category,
-        enableSwipe: false,
-        expanded: expanded,
-        onExpandedChanged: onExpandedChanged,
-        onListStatusChange: remember,
-        onDelete: () {
-          cache.remove(node.id, category: category);
-          onDelete?.call();
-        },
+    builder: (sheetContext) => ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+      ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: ContentEditWidget(
+          onDismiss: () => Navigator.pop(sheetContext),
+          id: node.id,
+          category: category,
+          onListStatusChange: remember,
+          onDelete: () {
+            cache.remove(node.id, category: category);
+            onDelete?.call();
+          },
+        ),
       ),
     ),
   );

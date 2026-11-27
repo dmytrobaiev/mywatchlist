@@ -387,18 +387,21 @@ Widget showNoContent({
   CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.center,
 }) {
   text ??= S.current.No_Content;
-  return Column(
-    mainAxisAlignment: mainAxisAlignment,
-    crossAxisAlignment: crossAxisAlignment,
-    children: [
-      const SizedBox(height: 20),
-      Text(
-        text,
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 13),
-      ),
-      const SizedBox(height: 20),
-    ],
+  return Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: mainAxisAlignment,
+      crossAxisAlignment: crossAxisAlignment,
+      children: [
+        const SizedBox(height: 20),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13),
+        ),
+        const SizedBox(height: 20),
+      ],
+    ),
   );
 }
 
@@ -652,12 +655,16 @@ Widget loadingText(BuildContext context) {
 
 Widget genresWidget(List<Genre> genres, String category, BuildContext context,
     {TextAlign textAlign = TextAlign.center}) {
-  plainButtonBuild(Genre e) => PlainButton(
-        onPressed: () => onGenrePress(e, category, context),
-        padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 5),
-        child: Text(
-          convertGenre(e, category).replaceAll("_", " "),
-          style: const TextStyle(fontSize: 12.0),
+  final scheme = Theme.of(context).colorScheme;
+  Widget genreTag(Genre e) => InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => onGenrePress(e, category, context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+          child: Text(
+            convertGenre(e, category).replaceAll("_", " "),
+            style: TextStyle(fontSize: 12.0, color: scheme.primary),
+          ),
         ),
       );
   return SingleChildScrollView(
@@ -672,11 +679,11 @@ Widget genresWidget(List<Genre> genres, String category, BuildContext context,
               child: Text(
                 '·',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ),
-          plainButtonBuild(genres[i]),
+          genreTag(genres[i]),
         ],
       ],
     ),

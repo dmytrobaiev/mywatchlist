@@ -187,30 +187,26 @@ void main() {
     });
   });
 
-  group('QuickEditModalSheet & plain inline comments', () {
-    testWidgets('uses DraggableScrollableSheet without EditSwipeArea and renders inline comments TextField',
+  group('QuickEdit swipe & plain inline comments', () {
+    testWidgets('uses EditSwipeArea, handle tap to expand, and inline comments TextField',
         (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.5;
       addTearDown(tester.view.reset);
 
       final service = _StubEntryService();
-      await tester.pumpWidget(_app(QuickEditModalSheet.editor(
-        editorBuilder: (context, expanded, onExpandedChanged) => ContentEditWidget(
+      await tester.pumpWidget(_app(SingleChildScrollView(
+        child: ContentEditWidget(
           id: 5114,
           category: 'anime',
           service: service,
-          enableSwipe: false,
-          expanded: expanded,
-          onExpandedChanged: onExpandedChanged,
         ),
       )));
       await tester.pumpAndSettle();
 
-      expect(find.byType(DraggableScrollableSheet), findsOneWidget);
-      expect(find.byType(EditSwipeArea), findsNothing);
+      expect(find.byType(EditSwipeArea), findsOneWidget);
 
-      await tester.tap(find.text('More options'));
+      await tester.tap(find.byKey(const ValueKey('edit-handle')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Others'));
       await tester.pumpAndSettle();

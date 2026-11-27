@@ -37,9 +37,8 @@ class LiveListStatus {
   }
 }
 
-/// Edit panel for the detail page: the list editor, then the cross-tracker
-/// sync when other trackers are signed in. Uses a single scrollable when
-/// hosted in a draggable sheet ([scrollController] provided).
+/// Floating edit panel above the FAB: the list editor, then the
+/// cross-tracker sync when other trackers are signed in.
 class DetailEditPanel extends StatelessWidget {
   final DetailData data;
   final bool showCrossTracker;
@@ -48,18 +47,8 @@ class DetailEditPanel extends StatelessWidget {
   final ValueChanged<LiveListStatus> onLiveStatus;
   final VoidCallback onDelete;
 
-  /// Closes the panel.
+  /// Closes the panel (a swipe down on the editor's handle).
   final VoidCallback? onClose;
-
-  /// Sheet scroll controller when hosted inside [QuickEditModalSheet].
-  final ScrollController? scrollController;
-
-  /// Synced expansion state when hosted inside [QuickEditModalSheet].
-  final bool? expanded;
-  final ValueChanged<bool>? onExpandedChanged;
-
-  /// Whether manual swipe detection is active (off inside a draggable sheet).
-  final bool enableSwipe;
 
   const DetailEditPanel({
     super.key,
@@ -70,57 +59,47 @@ class DetailEditPanel extends StatelessWidget {
     required this.onLiveStatus,
     required this.onDelete,
     this.onClose,
-    this.scrollController,
-    this.expanded,
-    this.onExpandedChanged,
-    this.enableSwipe = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final content = data.content;
     final saved = content?.myListStatus;
-    final body = SingleChildScrollView(
-      controller: scrollController,
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ContentEditWidget(
-            id: data.id,
-            contentDetailed: content,
-            category: data.category,
-            onUpdate: onUpdate,
-            onListStatusChange: (status) {
-              final value = LiveListStatus.from(status);
-              if (value != null) onLiveStatus(value);
-            },
-            onDelete: onDelete,
-            onDismiss: onClose,
-            enableSwipe: enableSwipe,
-            expanded: expanded,
-            onExpandedChanged: onExpandedChanged,
-          ),
-          if (showCrossTracker)
-            CrossTrackerWidget(
-              malId: data.id,
-              title: content?.title ?? '',
-              category: data.category,
-              malStatus: live?.status ?? saved?.status,
-              malScore: live?.score ?? saved?.score,
-              // The MAL manga list status has no parsed chapter count yet.
-              malProgress: live?.progress ??
-                  (data.isAnime ? saved?.numEpisodesWatched : null),
-            ),
-        ],
-      ),
-    );
-    if (scrollController != null) return body;
     return ConstrainedBox(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.6,
       ),
-      child: body,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ContentEditWidget(
+              id: data.id,
+              contentDetailed: content,
+              category: data.category,
+              onUpdate: onUpdate,
+              onListStatusChange: (status) {
+                final value = LiveListStatus.from(status);
+                if (value != null) onLiveStatus(value);
+              },
+              onDelete: onDelete,
+              onDismiss: onClose,
+            ),
+            if (showCrossTracker)
+              CrossTrackerWidget(
+                malId: data.id,
+                title: content?.title ?? '',
+                category: data.category,
+                malStatus: live?.status ?? saved?.status,
+                malScore: live?.score ?? saved?.score,
+                // The MAL manga list status has no parsed chapter count yet.
+                malProgress: live?.progress ??
+                    (data.isAnime ? saved?.numEpisodesWatched : null),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

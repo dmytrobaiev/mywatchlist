@@ -90,10 +90,22 @@ class _ExploreListScreenState<T> extends State<ExploreListScreen<T>> {
       appBar: AppBar(title: Text(widget.title)),
       body: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-          list,
-          SliverToBoxAdapter(child: _footer()),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          if (_items.isEmpty && (_failed || _done))
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: SectionMessage(
+                icon: _failed ? Icons.cloud_off_rounded : Icons.inbox_outlined,
+                text: _failed ? S.current.Explore_Section_Failed : S.current.Explore_Section_Empty,
+                onRetry: _failed ? _loadMore : null,
+                centered: true,
+              ),
+            )
+          else ...[
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            list,
+            SliverToBoxAdapter(child: _footer()),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
         ],
       ),
     );

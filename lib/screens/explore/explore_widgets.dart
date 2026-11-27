@@ -126,13 +126,46 @@ class SectionMessage extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback? onRetry;
+  final bool centered;
 
-  const SectionMessage(
-      {super.key, required this.icon, required this.text, this.onRetry});
+  const SectionMessage({
+    super.key,
+    required this.icon,
+    required this.text,
+    this.onRetry,
+    this.centered = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    if (centered) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 48, color: scheme.onSurfaceVariant),
+              const SizedBox(height: 12),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+              if (onRetry != null) ...[
+                const SizedBox(height: 16),
+                FilledButton.tonal(
+                  onPressed: onRetry,
+                  child: Text(S.current.Explore_Try_Again),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: kExplorePadding, vertical: 12),

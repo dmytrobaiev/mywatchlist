@@ -41,6 +41,9 @@ class SearchHomeView extends StatelessWidget {
 
   /// Runs [query] as typed (a past search, a ranking chip, a season).
   final ValueChanged<String> onQuery;
+
+  /// Fills [query] into the search bar without submitting (e.g. long-pressing a tag suggestion).
+  final ValueChanged<String>? onFillQuery;
   final ScrollController? controller;
 
   const SearchHomeView({
@@ -48,6 +51,7 @@ class SearchHomeView extends StatelessWidget {
     required this.history,
     required this.suggestions,
     required this.onQuery,
+    this.onFillQuery,
     this.controller,
   });
 
@@ -57,7 +61,11 @@ class SearchHomeView extends StatelessWidget {
       controller: controller,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       slivers: [
-        _SuggestionsSliver(suggestions: suggestions, onQuery: onQuery),
+        _SuggestionsSliver(
+          suggestions: suggestions,
+          onQuery: onQuery,
+          onFillQuery: onFillQuery,
+        ),
         _QueriesSliver(history: history, onQuery: onQuery),
         _RecentSliver(
           stream: history.recentAnimeStream,
@@ -124,8 +132,13 @@ class _SectionHeader extends StatelessWidget {
 class _SuggestionsSliver extends StatelessWidget {
   final ValueListenable<SuggestionState> suggestions;
   final ValueChanged<String> onQuery;
+  final ValueChanged<String>? onFillQuery;
 
-  const _SuggestionsSliver({required this.suggestions, required this.onQuery});
+  const _SuggestionsSliver({
+    required this.suggestions,
+    required this.onQuery,
+    this.onFillQuery,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +180,7 @@ class _SuggestionsSliver extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                     onTap: () => onQuery(preset.query),
+                    onLongPress: onFillQuery == null ? null : () => onFillQuery!(preset.query),
                   );
                 },
               ),

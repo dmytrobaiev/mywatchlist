@@ -15,6 +15,8 @@ class SearchHistory {
   static const String _displaySubTypeKey = 'search_display_sub_type';
   static const String _gridAxisCountKey = 'search_grid_axis_count';
   static const String _gridHeightKey = 'search_grid_height';
+  static const String _gridSavePerLayoutKey = 'search_grid_save_per_layout';
+  static const String _gridHeightsKey = 'search_grid_heights';
   static const int maxQueries = 7;
   static const int maxRecentItems = 24;
 
@@ -44,6 +46,8 @@ class SearchHistory {
   DisplaySubType displaySubType = DisplaySubType.compact;
   int gridAxisCount = 3;
   double gridHeight = 200;
+  bool saveHeightPerLayout = true;
+  Map<DisplaySubType, double> gridHeights = {};
 
   bool _loaded = false;
 
@@ -88,6 +92,22 @@ class SearchHistory {
     }
     gridAxisCount = prefs.getInt(_gridAxisCountKey) ?? 3;
     gridHeight = prefs.getDouble(_gridHeightKey) ?? 200;
+    saveHeightPerLayout = prefs.getBool(_gridSavePerLayoutKey) ?? true;
+    gridHeights = {};
+    final rawHeights = prefs.getString(_gridHeightsKey);
+    if (rawHeights != null && rawHeights.isNotEmpty) {
+      try {
+        final decoded = json.decode(rawHeights);
+        if (decoded is Map) {
+          for (final entry in decoded.entries) {
+            final key = DisplaySubType.values.where((v) => v.name == entry.key).firstOrNull;
+            if (key != null && entry.value is num) {
+              gridHeights[key] = (entry.value as num).toDouble();
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     _loaded = true;
     _notifyAll();
@@ -194,6 +214,11 @@ class SearchHistory {
     await prefs.setInt(_displaySubTypeKey, displaySubType.index);
     await prefs.setInt(_gridAxisCountKey, gridAxisCount);
     await prefs.setDouble(_gridHeightKey, gridHeight);
+    await prefs.setBool(_gridSavePerLayoutKey, saveHeightPerLayout);
+    await prefs.setString(
+      _gridHeightsKey,
+      json.encode({for (final e in gridHeights.entries) e.key.name: e.value}),
+    );
   }
 
   void _notifyAll() {

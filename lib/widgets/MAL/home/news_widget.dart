@@ -106,6 +106,7 @@ class _NewsTile extends StatelessWidget {
               height: 220,
               width: 120,
               url: imageUrl,
+              useUserImageOnError: false,
               onTap: () => zoomInImage(context, imageUrl),
               radius: BorderRadius.circular(HomePageNewsWidget._radius),
               userRoundBorderforLoading: false,

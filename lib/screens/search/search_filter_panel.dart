@@ -11,31 +11,64 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 /// How anime and manga results are laid out.
 @immutable
 class SearchDisplay {
+  static const double minGridHeight = 100.0;
+  static const double maxGridHeight = 360.0;
+
   final DisplayType type;
   final DisplaySubType subType;
   final int gridColumns;
   final double gridHeight;
+  final bool saveHeightPerLayout;
+  final Map<DisplaySubType, double> gridHeights;
 
   const SearchDisplay({
     this.type = DisplayType.grid,
     this.subType = DisplaySubType.compact,
     this.gridColumns = 3,
     this.gridHeight = 200,
+    this.saveHeightPerLayout = true,
+    this.gridHeights = const {},
   });
 
   static const defaults = SearchDisplay();
+
+  double effectiveGridHeight([DisplaySubType? forSubType]) {
+    final target = forSubType ?? subType;
+    final raw = saveHeightPerLayout ? (gridHeights[target] ?? gridHeight) : gridHeight;
+    return raw.clamp(minGridHeight, maxGridHeight);
+  }
+
+  SearchDisplay withGridHeight(double height) {
+    final clamped = height.clamp(minGridHeight, maxGridHeight);
+    if (!saveHeightPerLayout) return copyWith(gridHeight: clamped);
+    return copyWith(
+      gridHeight: clamped,
+      gridHeights: {...gridHeights, subType: clamped},
+    );
+  }
+
+  SearchDisplay withSubType(DisplaySubType next) {
+    final nextHeight = saveHeightPerLayout
+        ? (gridHeights[next] ?? gridHeight).clamp(minGridHeight, maxGridHeight)
+        : gridHeight;
+    return copyWith(subType: next, gridHeight: nextHeight);
+  }
 
   SearchDisplay copyWith({
     DisplayType? type,
     DisplaySubType? subType,
     int? gridColumns,
     double? gridHeight,
+    bool? saveHeightPerLayout,
+    Map<DisplaySubType, double>? gridHeights,
   }) =>
       SearchDisplay(
         type: type ?? this.type,
         subType: subType ?? this.subType,
         gridColumns: gridColumns ?? this.gridColumns,
         gridHeight: gridHeight ?? this.gridHeight,
+        saveHeightPerLayout: saveHeightPerLayout ?? this.saveHeightPerLayout,
+        gridHeights: gridHeights ?? this.gridHeights,
       );
 
   bool get isGrid => type == DisplayType.grid;
@@ -262,8 +295,8 @@ class _DisplayTab extends StatelessWidget {
 
   static const _minColumns = 2;
   static const _maxColumns = 8;
-  static const _minHeight = 160.0;
-  static const _maxHeight = 360.0;
+  static const _minHeight = SearchDisplay.minGridHeight;
+  static const _maxHeight = SearchDisplay.maxGridHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -298,7 +331,7 @@ class _DisplayTab extends StatelessWidget {
         RadioGroup<DisplaySubType>(
           groupValue: display.subType,
           onChanged: (value) {
-            if (value != null) onChanged(display.copyWith(subType: value));
+            if (value != null) onChanged(display.withSubType(value));
           },
           child: Column(
             children: [
@@ -320,15 +353,30 @@ class _DisplayTab extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _BoundedSlider(
-            title: S.current.Srch_Display_Height(display.gridHeight.round()),
-            value: display.gridHeight.clamp(_minHeight, _maxHeight),
+            title: S.current.Srch_Display_Height(display.effectiveGridHeight().round()),
+            value: display.effectiveGridHeight(),
             min: _minHeight,
             max: _maxHeight,
-            divisions: 100,
+            divisions: 26,
             minLabel: '${_minHeight.round()}',
             maxLabel: '${_maxHeight.round()}',
-            label: '${display.gridHeight.round()}',
-            onChanged: (v) => onChanged(display.copyWith(gridHeight: v.roundToDouble())),
+            label: '${display.effectiveGridHeight().round()}',
+            onChanged: (v) => onChanged(display.withGridHeight(v.roundToDouble())),
+          ),
+          SwitchListTile(
+            title: Text(S.current.UserList_Save_Height_Per_Layout),
+            subtitle: Text(
+              S.current.UserList_Save_Height_Per_Layout_Desc,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            value: display.saveHeightPerLayout,
+            onChanged: (v) {
+              final next = display.copyWith(saveHeightPerLayout: v);
+              onChanged(v ? next.withGridHeight(display.effectiveGridHeight()) : next);
+            },
           ),
         ],
       ],

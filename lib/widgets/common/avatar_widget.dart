@@ -17,6 +17,7 @@ class AvatarWidget extends StatelessWidget {
   final String? username;
   final BoxFit? fit;
   final bool? userRoundBorderforLoading;
+  final bool useUserImageOnError;
   final Function? onLongPress;
   final Color? borderColor;
   final double borderWidth;
@@ -30,6 +31,7 @@ class AvatarWidget extends StatelessWidget {
     this.radius,
     this.onLongPress,
     this.userRoundBorderforLoading = true,
+    this.useUserImageOnError = true,
     this.username,
     this.isNetworkImage = true,
     this.fit = BoxFit.cover,
@@ -46,6 +48,10 @@ class AvatarWidget extends StatelessWidget {
 
     final clipRadius = radius ?? BorderRadius.circular(50);
 
+    Widget fallback() => useUserImageOnError
+        ? PersonPlaceholder(radius: clipRadius)
+        : ImagePlaceholder(radius: clipRadius);
+
     final image = SizedBox(
       height: height,
       width: width,
@@ -57,10 +63,10 @@ class AvatarWidget extends StatelessWidget {
               fit: fit ?? BoxFit.cover,
               borderRadius: clipRadius,
               placeholder: (context) => _buildShimmerLoader(context, radius),
-              errorWidget: (_) => PersonPlaceholder(radius: clipRadius),
+              errorWidget: (_) => fallback(),
             )
           : url == null
-              ? PersonPlaceholder(radius: clipRadius)
+              ? fallback()
               : ClipRRect(
                   borderRadius: clipRadius,
                   child: Image.asset(url!, fit: fit),
@@ -135,6 +141,38 @@ class PersonPlaceholder extends StatelessWidget {
                     minFontSize: 10,
                     style: TextStyle(fontSize: 22, color: scheme.onSecondaryContainer),
                   ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// A missing or broken non-user image (anime/manga pictures, articles, covers):
+/// an image icon on a neutral container matching the active theme.
+class ImagePlaceholder extends StatelessWidget {
+  final BorderRadius? radius;
+
+  const ImagePlaceholder({super.key, this.radius});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: radius,
+      ),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final side = box.biggest.shortestSide.isFinite ? box.biggest.shortestSide : 48.0;
+          final iconSize = (side * 0.38).clamp(20.0, 56.0);
+          return Center(
+            child: Icon(
+              Icons.image_outlined,
+              size: iconSize,
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+            ),
           );
         },
       ),

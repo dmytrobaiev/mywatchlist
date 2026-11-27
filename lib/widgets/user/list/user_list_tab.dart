@@ -38,7 +38,7 @@ SliverGridDelegateWithFixedCrossAxisCount listGridDelegate(ListDisplay display) 
   final gaps = listGridGaps(display.subType);
   return SliverGridDelegateWithFixedCrossAxisCount(
     crossAxisCount: display.gridColumns,
-    mainAxisExtent: display.gridHeight,
+    mainAxisExtent: display.effectiveGridHeight(),
     crossAxisSpacing: gaps.column,
     mainAxisSpacing: gaps.row,
   );
@@ -273,25 +273,31 @@ class _MessageView extends StatelessWidget {
         builder: (context, constraints) => SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 56, color: theme.colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 16),
-                  Text(title, textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 6),
-                  Text(message,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                  if (action != null) ...[
-                    const SizedBox(height: 20),
-                    FilledButton.tonal(onPressed: action!.$2, child: Text(action!.$1)),
+            constraints: BoxConstraints(
+              minWidth: constraints.maxWidth,
+              minHeight: constraints.maxHeight,
+            ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 56, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(height: 16),
+                    Text(title, textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    Text(message,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                    if (action != null) ...[
+                      const SizedBox(height: 20),
+                      FilledButton.tonal(onPressed: action!.$2, child: Text(action!.$1)),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

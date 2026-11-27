@@ -65,11 +65,8 @@ class _CountingClient extends FakeClient {
 
 const _fab = ValueKey('close-fab');
 
-/// The tonal delete button (a private `FilledButton` subclass).
-final _deleteButton = find.ancestor(
-  of: find.text('Delete from List'),
-  matching: find.byWidgetPredicate((w) => w is FilledButton),
-);
+/// The tonal icon-only delete button.
+final _deleteButton = find.byKey(const ValueKey('edit-delete'));
 
 /// The detail screen's layout: the panel floats 70 px above the bottom, the
 /// close FAB sits at the end, the phone has a gesture bar.
@@ -171,13 +168,14 @@ void main() {
     await _pump(tester, entries: _FakeEntries(), sync: _sync(client));
 
     expect(find.text('Completed'), findsOneWidget);
-    expect(find.text('Delete from List'), findsOneWidget);
+    expect(_deleteButton, findsOneWidget);
+    expect(find.byTooltip('Delete from List'), findsOneWidget);
     expect(find.text('Other trackers'), findsNothing);
     expect(find.byKey(const ValueKey('cross-tracker-card')), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(client.finds + client.reads, 0, reason: 'nothing loads on open');
 
-    await tester.tap(find.text('More options'));
+    await tester.tap(find.byKey(const ValueKey('edit-handle')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('edit-other-trackers')), findsOneWidget);
     expect(client.finds + client.reads, 0,
@@ -205,9 +203,7 @@ void main() {
       (tester) async {
     await _pump(tester,
         entries: _FakeEntries(), sync: _sync(_CountingClient()));
-    _expectClearOfFab(
-        tester, _deleteButton);
-    _expectClearOfFab(tester, find.text('More options'));
+    _expectClearOfFab(tester, _deleteButton);
   });
 
   testWidgets(
@@ -235,7 +231,7 @@ void main() {
         entries: _FakeEntries(),
         sync: _sync(_CountingClient()),
         locale: const Locale('fr', 'FR'));
-    await tester.tap(find.text('Plus d’options'));
+    await tester.tap(find.byKey(const ValueKey('edit-handle')));
     await tester.pumpAndSettle();
     final header = find.text('Autres services de suivi');
     await tester.ensureVisible(header);
@@ -243,7 +239,7 @@ void main() {
     await tester.tap(header);
     await tester.pumpAndSettle();
     expect(find.text('Synchroniser'), findsOneWidget);
-    expect(find.text('Supprimer de la liste'), findsOneWidget);
+    expect(find.byTooltip('Supprimer de la liste'), findsOneWidget);
     for (final english in ['Other trackers', 'Sync', 'Delete from List']) {
       expect(find.text(english), findsNothing, reason: english);
     }

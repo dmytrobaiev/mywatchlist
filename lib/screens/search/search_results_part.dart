@@ -9,6 +9,7 @@ extension _SearchBody on _GeneralSearchScreenState {
           history: _history,
           suggestions: _suggestions,
           onQuery: _searchFrom,
+          onFillQuery: _fillFrom,
         );
       case SearchStage.started:
         return const Align(
@@ -60,10 +61,9 @@ extension _SearchBody on _GeneralSearchScreenState {
   Widget _buildMessage({required IconData icon, required String title, String? hint, Widget? action}) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurface.withValues(alpha: 0.5);
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 80, 32, 0),
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -109,9 +109,10 @@ extension _SearchBody on _GeneralSearchScreenState {
           SliverList.builder(
             itemCount: items.length,
             itemBuilder: (context, index) => media
-                ? SizedBox(
-                    height: listRowExtent(DisplaySubType.compact),
-                    child: _entryCard(items[index], tab, grid: false, subType: DisplaySubType.compact),
+                ? MediaTile(
+                    item: items[index],
+                    category: tab,
+                    size: MediaTileSize.comfortable,
                   )
                 : tab == SearchCategory.character || tab == SearchCategory.person
                     ? PersonTile(item: items[index], isCharacter: tab == SearchCategory.character)
@@ -168,9 +169,14 @@ extension _SearchBody on _GeneralSearchScreenState {
         );
       case SearchCategory.news:
       case SearchCategory.featured:
+        final isNews = category == SearchCategory.news;
         content = SliverList.builder(
           itemCount: page.articles.length,
-          itemBuilder: (_, i) => ArticleTile(item: page.articles[i], isNews: category == SearchCategory.news),
+          itemBuilder: (_, i) => ArticleTile(
+            item: page.articles[i],
+            isNews: isNews,
+            onTagTap: (tag) => _applyArticleTag(tag, isNews: isNews),
+          ),
         );
       case SearchCategory.character:
       case SearchCategory.person:
@@ -181,17 +187,21 @@ extension _SearchBody on _GeneralSearchScreenState {
       default:
         if (media && display.isGrid) {
           content = _gridSliver(page.media, category,
-              columns: display.gridColumns, height: display.gridHeight, subType: display.subType);
+              columns: display.gridColumns, height: display.effectiveGridHeight(), subType: display.subType);
         } else {
-          // The rows of the user's list (same styles), with the user's status.
-          final subType = switch (display.subType) {
-            DisplaySubType.compact || DisplaySubType.spacious => display.subType,
-            _ => DisplaySubType.comfortable,
+          final tileSize = switch (display.subType) {
+            DisplaySubType.compact => MediaTileSize.compact,
+            DisplaySubType.spacious => MediaTileSize.spacious,
+            _ => MediaTileSize.comfortable,
           };
-          content = SliverFixedExtentList.builder(
-            itemExtent: listRowExtent(subType),
+          content = SliverList.builder(
             itemCount: page.media.length,
-            itemBuilder: (_, i) => _entryCard(page.media[i], category, grid: false, subType: subType),
+            itemBuilder: (_, i) => MediaTile(
+              item: page.media[i],
+              category: category,
+              size: tileSize,
+              showEdit: true,
+            ),
           );
         }
     }
@@ -220,12 +230,11 @@ extension _SearchBody on _GeneralSearchScreenState {
       DisplaySubType.compact || DisplaySubType.cover_only_grid => subType,
       _ => DisplaySubType.comfortable,
     };
-    // The list cards need the list's height to fit their bar and title.
     final display = ListDisplay(
       type: DisplayType.grid,
       subType: type,
       gridColumns: columns,
-      gridHeight: height < 230 ? 230 : height,
+      gridHeight: height,
     );
     return SliverPadding(
       padding: listGridPadding(type),

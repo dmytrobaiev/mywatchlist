@@ -72,7 +72,7 @@ extension SettingsSectionInfo on SettingsSection {
       case SettingsSection.homePage:
         return S.current.HomePageSettings_desc;
       case SettingsSection.sidebar:
-        return S.current.Customize_Home_Page;
+        return S.current.Sidebar_Settings_Desc;
       case SettingsSection.notifications:
         return S.current.Settings_Notifications_Desc;
       case SettingsSection.userPreferences:
