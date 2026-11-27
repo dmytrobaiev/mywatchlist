@@ -106,7 +106,7 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   /// the time of this sheet's last write); null when unknown.
   DateTime? _updatedAt;
 
-  late bool _advanced = widget.expanded ?? false;
+  bool _advanced = false;
   bool _repeatOpen = false;
   bool _datesOpen = true;
   bool _othersOpen = false;

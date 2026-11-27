@@ -121,7 +121,12 @@ class _StudioScreenState extends State<StudioScreen> {
     if (url == _sampledLogoUrl) return;
     _sampledLogoUrl = url;
     _detachLogoStream();
-    final provider = AppImage.provider(url, width: 120, height: 120, dpr: 1);
+    final provider = AppImage.provider(
+      url,
+      logicalWidth: 120,
+      logicalHeight: 120,
+      devicePixelRatio: 1,
+    );
     final stream = provider.resolve(ImageConfiguration.empty);
     final listener = ImageStreamListener(
       (info, _) async {
