@@ -16,7 +16,6 @@ import 'package:mywatchlist/services/api/MAL/scrapper/anime_news_featured.dart';
 import 'package:mywatchlist/widgets/MAL/content/animepictures.dart';
 import 'package:mywatchlist/widgets/MAL/content/intereststackwidget.dart';
 import 'package:mywatchlist/widgets/common/app_image.dart';
-import 'package:mywatchlist/widgets/common/avatar_widget.dart';
 import 'package:mywatchlist/widgets/common/smooth_collapse.dart';
 import 'package:mywatchlist/widgets/user/contenteditwidget.dart';
 import 'package:mywatchlist/widgets/user/edit/edit_rules.dart';
@@ -193,8 +192,8 @@ void main() {
     });
   });
 
-  group('Pictures index & BoxFit.contain', () {
-    testWidgets('tapping second picture opens gallery at 2 / 3 with BoxFit.contain thumbnails',
+  group('Pictures index & BoxFit.fitHeight', () {
+    testWidgets('tapping second picture opens gallery at 2 / 3 with BoxFit.fitHeight strip',
         (tester) async {
       final pics = [
         Picture(large: 'https://cdn.myanimelist.net/images/anime/1/1.jpg'),
@@ -203,14 +202,14 @@ void main() {
       ];
       await tester.pumpWidget(_app(AnimePictures(pictures: pics)));
 
-      final avatars = tester.widgetList<AvatarWidget>(find.byType(AvatarWidget)).toList();
-      expect(avatars.length, 3);
-      for (final a in avatars) {
-        expect(a.fit, BoxFit.contain);
-        expect(a.height, 304);
+      final images = tester.widgetList<Image>(find.byType(Image)).toList();
+      expect(images.length, 3);
+      for (final img in images) {
+        expect(img.fit, BoxFit.fitHeight);
+        expect(img.height, AnimePictures.stripHeight);
       }
 
-      await tester.tap(find.byType(AvatarWidget).at(1));
+      await tester.tap(find.byType(InkWell).at(1));
       await tester.pump();
       expect(find.text('2 / 3'), findsOneWidget);
     });

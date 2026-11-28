@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mywatchlist/constants/constants.dart';
@@ -323,76 +325,145 @@ class _VideosWidgetState extends State<VideosWidget> {
   }
 }
 
+Future<void> _restorePortraitOrientation() async {
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  await SystemChrome.setPreferredOrientations(const [
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+  unawaited(Future<void>.delayed(const Duration(milliseconds: 450), () {
+    SystemChrome.setPreferredOrientations(const []);
+  }));
+}
+
 Future<void> showYouTubeVideo({
   required String url,
   required BuildContext context,
 }) async {
-  final videoId = YoutubePlayer.convertUrlToId(url);
+  final videoId = YoutubePlayerController.convertUrlToId(url);
 
-  // The embedded player is opt-in (allowYoutubePlayer); otherwise open YouTube.
+  // The embedded player is opt-in (allowYoutubePlayer); otherwise open externally.
   if (videoId != null && Preferences.general.allowYoutubePlayer) {
-    YoutubePlayerController _controller = YoutubePlayerController(
-      initialVideoId: videoId,
-      flags: const YoutubePlayerFlags(
-        autoPlay: true,
-        mute: false,
-        enableCaption: true,
-      ),
-    );
-
-    // A video its owner keeps off other sites (YouTube errors 101, 150, 152) never plays
-    // here: close the player and offer YouTube instead of a spinner that never ends.
     var failed = false;
+    var openExternally = false;
+    var wasFullScreen = false;
     BuildContext? dialogContext;
-    void onPlayerChange() {
-      if (failed || _controller.value.errorCode == 0) return;
+
+    void handleFailure() {
+      if (failed) return;
       failed = true;
       final open = dialogContext;
-      if (open != null && open.mounted) Navigator.of(open).pop();
+      if (open != null && open.mounted) {
+        Navigator.of(open).pop();
+      }
     }
 
-    _controller.addListener(onPlayerChange);
-    await showDialog(
-      context: context,
-      builder: (context) {
-        dialogContext = context;
-        final aspectRatio = MediaQuery.of(context).size.aspectRatio;
-        final closeButton = Positioned(
-          right: 10,
-          top: aspectRatio > 1 ? MediaQuery.of(context).size.height * 0.1 : 40,
-          child: ShadowButton(
-            padding: const EdgeInsets.all(10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        );
-
-        return AlertDialog(
-          insetPadding: EdgeInsets.zero,
-          contentPadding: EdgeInsets.zero,
-          backgroundColor: Theme.of(context).colorScheme.scrim,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          content: Stack(
-            children: [
-              YoutubePlayer(
-                controller: _controller,
-                showVideoProgressIndicator: true,
-                progressIndicatorColor: Theme.of(context).colorScheme.primary,
-              ),
-              closeButton,
-            ],
-          ),
-        );
-      },
+    final controller = YoutubePlayerController.fromVideoId(
+      videoId: videoId,
+      autoPlay: true,
+      params: const YoutubePlayerParams(
+        mute: false,
+        enableCaption: true,
+        showControls: false,
+        strictRelatedVideos: true,
+      ),
+      onLoadError: (_) => handleFailure(),
     );
 
-    _controller.removeListener(onPlayerChange);
-    _controller.dispose();
-    if (failed && context.mounted) launchURLWithConfirmation(url, context: context);
+    final sub = controller.stream.listen((value) {
+      if (value.hasError || value.loadError != null) {
+        handleFailure();
+      }
+    });
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierColor: Colors.black87,
+        builder: (ctx) {
+          dialogContext = ctx;
+          final scheme = Theme.of(ctx).colorScheme;
+          return Dialog(
+            backgroundColor: Colors.black,
+            surfaceTintColor: Colors.transparent,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  color: Colors.black,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        tooltip: S.current.Open_In_Browser,
+                        color: Colors.white70,
+                        icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                        onPressed: () {
+                          openExternally = true;
+                          Navigator.of(ctx).pop();
+                        },
+                      ),
+                      IconButton(
+                        tooltip: S.current.Close,
+                        color: Colors.white,
+                        icon: const Icon(Icons.close_rounded, size: 22),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                Theme(
+                  data: Theme.of(ctx).copyWith(
+                    extensions: [
+                      YoutubePlayerTheme(
+                        progressBarActiveColor: scheme.primary,
+                        progressBarBufferedColor:
+                            scheme.primary.withValues(alpha: 0.4),
+                        controlsColor: Colors.white,
+                      ),
+                    ],
+                  ),
+                  child: YoutubePlayer(
+                    controller: controller,
+                    aspectRatio: 16 / 9,
+                    autoPlayWhenVisible: false,
+                    backgroundColor: Colors.black,
+                    onFullScreenChanged: (isFullScreen) {
+                      if (isFullScreen) {
+                        wasFullScreen = true;
+                      } else if (wasFullScreen) {
+                        wasFullScreen = false;
+                        unawaited(_restorePortraitOrientation());
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } finally {
+      await sub.cancel();
+      controller.close();
+      if (wasFullScreen) {
+        await _restorePortraitOrientation();
+      } else {
+        await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      }
+    }
+
+    if ((failed || openExternally) && context.mounted) {
+      launchURLWithConfirmation(url, context: context);
+    }
   } else {
     launchURLWithConfirmation(url, context: context);
   }

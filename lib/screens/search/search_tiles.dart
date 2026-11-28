@@ -167,19 +167,30 @@ class MediaTile extends StatelessWidget {
           Icon(Icons.star_rounded, size: 16, color: AppColors.of(context).score.color),
           const SizedBox(width: 2),
           Text(ratingFormat.format(item.score), style: theme.textTheme.bodySmall),
-        ],
-        if (item.members > 0)
-          Flexible(
-            child: Padding(
-              padding: const EdgeInsetsDirectional.only(start: 4),
-              child: Text(
-                '(${userCountFormat.format(item.members)})',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(color: muted),
+          if (item.members > 0)
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(start: 4),
+                child: Text(
+                  '(${userCountFormat.format(item.members)})',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                ),
               ),
             ),
+        ] else if (item.members > 0) ...[
+          Icon(Icons.people_outline, size: 14, color: muted),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              userCountFormat.format(item.members),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(color: muted),
+            ),
           ),
+        ],
       ],
     );
 
@@ -204,45 +215,59 @@ class MediaTile extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: SizedBox(
-                height: h,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: h),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    if (!compact) ...[meta, const SizedBox(height: 4)],
-                    Text(
-                      item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: size == MediaTileSize.spacious
-                          ? theme.textTheme.titleMedium
-                          : theme.textTheme.titleSmall,
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!compact) ...[meta, const SizedBox(height: 4)],
+                        Text(
+                          item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: size == MediaTileSize.spacious
+                              ? theme.textTheme.titleMedium
+                              : theme.textTheme.titleSmall,
+                        ),
+                        if (typeLine.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            typeLine,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                          ),
+                        ],
+                        // The user's own status and score when it is in their list.
+                        if (showStatusPill) ...[
+                          const SizedBox(height: 6),
+                          ListStatusPill(id: item.id, category: category),
+                        ],
+                      ],
                     ),
-                    if (typeLine.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        typeLine,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                      ),
-                    ],
-                    // The user's own status and score when it is in their list.
-                    if (showStatusPill) ...[
-                      const SizedBox(height: 6),
-                      ListStatusPill(id: item.id, category: category),
-                    ],
-                    const Spacer(),
                     if (size == MediaTileSize.spacious &&
                         item.synopsis != null &&
                         item.synopsis!.isNotEmpty)
-                      Text(
-                        item.synopsis!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          item.synopsis!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                        ),
                       ),
-                    if (compact) meta,
+                    if (compact)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: meta,
+                      ),
                   ],
                 ),
               ),

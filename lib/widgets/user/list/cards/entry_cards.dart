@@ -399,7 +399,7 @@ class EntryGridCard extends StatelessWidget {
   /// Cover with the episode badges, the airing band and the priority flag.
   /// The airing line drawn over the top of the cover, null when off or not airing.
   String? _airing(BuildContext context) =>
-      style.showAiringInfo ? airingText(entry, now, Localizations.localeOf(context).toString()) : null;
+      style.showAiringInfo ? gridAiringText(entry, now, Localizations.localeOf(context).toString()) : null;
 
   /// Top of the first badge row: under the airing band when it is drawn.
   double _badgeTop(BuildContext context) => _airing(context) != null ? 22 : 7;
@@ -634,18 +634,16 @@ class GridCardBar extends StatelessWidget {
             children: [
               const SizedBox(width: 10),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, box) => Align(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
                     alignment: AlignmentDirectional.centerStart,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerStart,
-                      child: MeanScore(
-                        entry: entry,
-                        fontSize: 11.5,
-                        showMembers: box.maxWidth >= 78,
-                        dashWhenUnknown: true,
-                      ),
+                    child: MeanScore(
+                      entry: entry,
+                      fontSize: 11.5,
+                      showMembers: false,
+                      dashWhenUnknown: true,
                     ),
                   ),
                 ),

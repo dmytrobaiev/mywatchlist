@@ -144,7 +144,7 @@ class _SysonpsisWidgetState extends State<SysonpsisWidget>
           Center(
             child: genresWidget(widget.genres ?? [], widget.category, context),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 12),
           if (synopsis.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),

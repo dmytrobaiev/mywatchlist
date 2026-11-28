@@ -184,46 +184,51 @@ class _ShowAnimeForumState extends State<ShowAnimeForum>
                     ),
                   ),
                   const SizedBox(height: 6),
-                  // Bottom row: author + date | post count (2026.11.4 layout)
+                  // Bottom row: author + date on left | post count flush right
                   Row(
                     children: [
-                      // Author
-                      Icon(
-                        Icons.person_outline,
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          topic.authorUsername ?? S.current.Res_Unknown,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            // Author
+                            Icon(
+                              Icons.person_outline,
+                              size: 14,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                topic.authorUsername ?? S.current.Res_Unknown,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                            // Date right beside author
+                            if (topic.date != null) ...[
+                              const SizedBox(width: 10),
+                              Icon(
+                                Icons.date_range,
+                                size: 14,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatDate(topic.date),
+                                maxLines: 1,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                      // Date right beside author
-                      if (topic.date != null) ...[
-                        const SizedBox(width: 10),
-                        Icon(
-                          Icons.date_range,
-                          size: 14,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDate(topic.date),
-                          maxLines: 1,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
                       const SizedBox(width: 8),
-                      // Post count (tabular digits, never clipped on 4+ digit counts)
+                      // Post count flush right (tabular digits, never clipped)
                       Icon(
                         Icons.forum_outlined,
                         size: 14,

@@ -26,20 +26,20 @@ class ShowAnimeNews extends StatefulWidget {
   /// The source of the news pages (tests replace it with a fake).
   static NewsPageLoader loader = _defaultNews;
 
-  /// Page 1 races Jikan against MyAnimeList's own news page
-  /// ([JikanFallbacks.race]: 3 s head start, 12 s cap). Next pages exist only
-  /// when Jikan answered (MAL's page lists everything at once), so they come
-  /// from Jikan.
+  /// Page 1 prefers MyAnimeList's own news page because it always includes
+  /// publication dates, comment counts, and 2x thumbnails; falls back to Jikan
+  /// if the direct page fails. Subsequent pages come from Jikan.
   static Future<AnimeNewsResponse> _defaultNews(int id, String category, int page) async {
     if (page > 1) return _jikanNews(id, category, page);
-    final result = await JikanFallbacks.race<AnimeNewsResponse>(
-      jikan: () => _jikanNews(id, category, page),
-      fallback: () async => AnimeNewsResponse(
-        data: await JikanFallbacks.news(id, category),
+    try {
+      final items = await JikanFallbacks.news(id, category).timeout(const Duration(seconds: 8));
+      return AnimeNewsResponse(
+        data: items,
         pagination: Pagination(hasNextPage: false),
-      ),
-    );
-    return result.value;
+      );
+    } catch (_) {
+      return _jikanNews(id, category, page);
+    }
   }
 
   static Future<AnimeNewsResponse> _jikanNews(int id, String category, int page) =>
@@ -55,8 +55,8 @@ class ShowAnimeNews extends StatefulWidget {
 enum _NewsState { loading, ready, failed }
 
 class _ShowAnimeNewsState extends State<ShowAnimeNews> with AutomaticKeepAliveClientMixin {
-  static const double _height = 280;
-  static const double _cardWidth = 320;
+  static const double _height = 184;
+  static const double _cardWidth = 340;
   static const double _loadMoreDistance = 200;
 
   final List<AnimeNews> _news = [];
@@ -175,8 +175,10 @@ class _NewsCard extends StatelessWidget {
   const _NewsCard({required this.news, required this.width});
 
   String _date(BuildContext context) {
-    final date = news.date == null ? null : DateTime.tryParse(news.date!);
-    if (date == null) return '';
+    final raw = news.date?.trim();
+    if (raw == null || raw.isEmpty) return '';
+    final date = DateTime.tryParse(raw);
+    if (date == null) return raw;
     try {
       return DateFormat.yMMMd(Localizations.localeOf(context).toString()).format(date);
     } catch (_) {
@@ -196,7 +198,7 @@ class _NewsCard extends StatelessWidget {
       elevation: 0,
       color: scheme.surfaceContainerLow,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: InkWell(
         onTap: id == null
             ? null
@@ -210,25 +212,25 @@ class _NewsCard extends StatelessWidget {
                   ),
                 ),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(10),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               AppImage(
                 url: news.images?.jpg?.imageUrl,
-                width: 90,
-                height: 240,
-                borderRadius: BorderRadius.circular(12),
+                width: 105,
+                height: 156,
+                borderRadius: BorderRadius.circular(10),
                 placeholderColor: scheme.surfaceContainerHighest,
                 errorWidget: (_) => DecoratedBox(
                   decoration: BoxDecoration(
                     color: scheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
                     child: Icon(
                       Icons.image_outlined,
-                      size: 32,
+                      size: 28,
                       color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
                     ),
                   ),
@@ -241,20 +243,20 @@ class _NewsCard extends StatelessWidget {
                   children: [
                     Text(
                       news.title ?? '',
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, height: 1.3),
+                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, height: 1.25),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final style = theme.textTheme.bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4);
+                              ?.copyWith(color: scheme.onSurfaceVariant, height: 1.35);
                           final lineHeight = (style?.fontSize ?? 12.0) *
-                              (style?.height ?? 1.4) *
+                              (style?.height ?? 1.35) *
                               MediaQuery.textScalerOf(context).scale(1.0);
-                          final maxLines = (constraints.maxHeight / lineHeight).floor().clamp(1, 20);
+                          final maxLines = (constraints.maxHeight / lineHeight).floor().clamp(1, 10);
                           return Text(
                             news.excerpt ?? '',
                             maxLines: maxLines,
@@ -264,7 +266,7 @@ class _NewsCard extends StatelessWidget {
                         },
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Row(
                       children: [
                         Expanded(
@@ -278,28 +280,39 @@ class _NewsCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (date.isNotEmpty)
-                          Text(date, style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
-                      ],
-                    ),
-                    if (comments > 0) ...[
-                      const SizedBox(height: 4),
-                      Semantics(
-                        label: S.current.Dp_News_Comments(comments),
-                        excludeSemantics: true,
-                        child: Row(
-                          children: [
-                            Icon(Icons.chat_bubble_outline, size: 13, color: scheme.onSurfaceVariant),
-                            const SizedBox(width: 4),
-                            Text(
-                              NumberFormat.decimalPattern(Localizations.localeOf(context).toString())
-                                  .format(comments),
+                        if (date.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Flexible(
+                            flex: 0,
+                            child: Text(
+                              date,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                        ],
+                        if (comments > 0) ...[
+                          const SizedBox(width: 8),
+                          Semantics(
+                            label: S.current.Dp_News_Comments(comments),
+                            excludeSemantics: true,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.chat_bubble_outline, size: 12, color: scheme.onSurfaceVariant),
+                                const SizedBox(width: 3),
+                                Text(
+                                  NumberFormat.decimalPattern(Localizations.localeOf(context).toString())
+                                      .format(comments),
+                                  style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -331,30 +344,30 @@ class _NewsLoadingCard extends StatelessWidget {
         margin: const EdgeInsetsDirectional.only(end: 10, bottom: 4, top: 4),
         elevation: 0,
         color: scheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: ShimmerColor(
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
-                  height: 240,
-                  width: 90,
-                  decoration: BoxDecoration(color: scheme.onSurface, borderRadius: BorderRadius.circular(12)),
+                  height: 156,
+                  width: 105,
+                  decoration: BoxDecoration(color: scheme.onSurface, borderRadius: BorderRadius.circular(10)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      bar(height: 16, width: double.infinity),
+                      bar(height: 14, width: double.infinity),
                       const SizedBox(height: 6),
-                      bar(height: 16, width: 140),
-                      const SizedBox(height: 12),
+                      bar(height: 14, width: 130),
+                      const SizedBox(height: 10),
                       Expanded(child: bar()),
                       const SizedBox(height: 8),
-                      bar(height: 12, width: 80),
+                      bar(height: 11, width: 100),
                     ],
                   ),
                 ),

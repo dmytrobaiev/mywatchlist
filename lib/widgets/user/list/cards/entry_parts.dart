@@ -660,6 +660,17 @@ class CompactAiringBadge extends StatelessWidget {
   }
 }
 
+/// Compact airing line for grid cover bands: "Fri 10:00 · in 5d 2h".
+String? gridAiringText(ListEntryView e, DateTime now, String locale) {
+  final next = e.upcomingAiring(now);
+  if (next == null) return null;
+  final shown = _inTimezone(next, now);
+  final when = DateFormat('E HH:mm', locale).format(shown);
+  final short = shortAiringCountdown(e, now);
+  if (short == null) return when;
+  return '$when · in $short';
+}
+
 /// Next episode of an airing anime: "Ep. 8 · Sat 23:30 · in 2 d 4 h".
 String? airingText(ListEntryView e, DateTime now, String locale) {
   final next = e.upcomingAiring(now);
