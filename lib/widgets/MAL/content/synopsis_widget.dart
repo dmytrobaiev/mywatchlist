@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/generated/l10n.dart';
-import 'package:mywatchlist/screens/MAL/detail/detail_data.dart' show contentPref;
+import 'package:mywatchlist/screens/MAL/detail/header/header_background.dart' show contentPref;
 import 'package:mywatchlist/screens/MAL/detail/header/next_episode.dart';
 import 'package:mywatchlist/screens/MAL/detail/sections/next_episode_card.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:html/parser.dart' as html_parser;
 import 'package:mywatchlist/constants/constants.dart'
     show DisplaySubType, genresWidget;
 import 'package:mywatchlist/generated/l10n.dart';
@@ -266,7 +267,7 @@ void main() {
 </div>
 </body></html>
 ''';
-      final parsed = HtmlParsers.parseInterestStackDetail(html);
+      final parsed = HtmlParsers.parseInterestStackDetail(html_parser.parse(html));
       final malStacks = parsed['myAnimeListStacks'] as List;
       expect(malStacks, hasLength(1));
       expect(malStacks.first['username'], 'MyAnimeList');
@@ -283,9 +284,18 @@ void main() {
         title: 'Frieren',
         total: 28,
         progress: 10,
-        status: ListEntryStatus.watching,
+        status: ListEntryStatus.current,
         releaseState: ReleaseState.releasing,
         nextAiringAt: now.add(const Duration(days: 2, hours: 4)),
+      );
+      final busy = ValueNotifier<Set<int>>(const {});
+      addTearDown(busy.dispose);
+      final actions = EntryActions(
+        onOpen: (_) {},
+        onEdit: null,
+        onStep: null,
+        canStep: (_) => false,
+        busy: busy,
       );
       await tester.pumpWidget(_app(SizedBox(
         width: 360,
@@ -293,7 +303,7 @@ void main() {
         child: EntryListTile(
           entry: entry,
           subType: DisplaySubType.comfortable,
-          actions: const EntryCardActions(),
+          actions: actions,
           style: const EntryCardStyle(showAiringInfo: false),
           now: now,
           locale: 'en',
