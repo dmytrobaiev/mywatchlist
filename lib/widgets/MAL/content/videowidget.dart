@@ -382,7 +382,6 @@ Future<void> showYouTubeVideo({
         barrierColor: Colors.black87,
         builder: (ctx) {
           dialogContext = ctx;
-          final scheme = Theme.of(ctx).colorScheme;
           return Dialog(
             backgroundColor: Colors.black,
             surfaceTintColor: Colors.transparent,
@@ -420,31 +419,19 @@ Future<void> showYouTubeVideo({
                     ],
                   ),
                 ),
-                Theme(
-                  data: Theme.of(ctx).copyWith(
-                    extensions: [
-                      YoutubePlayerTheme(
-                        progressBarActiveColor: scheme.primary,
-                        progressBarBufferedColor:
-                            scheme.primary.withValues(alpha: 0.4),
-                        controlsColor: Colors.white,
-                      ),
-                    ],
-                  ),
-                  child: YoutubePlayer(
-                    controller: controller,
-                    aspectRatio: 16 / 9,
-                    autoPlayWhenVisible: false,
-                    backgroundColor: Colors.black,
-                    onFullScreenChanged: (isFullScreen) {
-                      if (isFullScreen) {
-                        wasFullScreen = true;
-                      } else if (wasFullScreen) {
-                        wasFullScreen = false;
-                        unawaited(_restorePortraitOrientation());
-                      }
-                    },
-                  ),
+                YoutubePlayer(
+                  controller: controller,
+                  aspectRatio: 16 / 9,
+                  autoPlayWhenVisible: false,
+                  backgroundColor: Colors.black,
+                  onFullScreenChanged: (isFullScreen) {
+                    if (isFullScreen) {
+                      wasFullScreen = true;
+                    } else if (wasFullScreen) {
+                      wasFullScreen = false;
+                      unawaited(_restorePortraitOrientation());
+                    }
+                  },
                 ),
               ],
             ),

@@ -163,7 +163,7 @@ void main() {
               date: '2026-06-30T09:26:00+00:00',
               comments: 42,
               images: Images(
-                jpg: Jpg(imageUrl: 'https://cdn.myanimelist.net/r/100x156/s/common/news.jpg'),
+                jpg: ImageFormat(imageUrl: 'https://cdn.myanimelist.net/r/100x156/s/common/news.jpg'),
               ),
             ),
           ];

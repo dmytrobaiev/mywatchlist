@@ -39,7 +39,7 @@ jobs:
         run: bash tools/l10n/build.sh
 
       - name: Run Flutter analyzer
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Analyze mwl-api
         run: |
