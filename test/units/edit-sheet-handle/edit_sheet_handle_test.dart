@@ -85,16 +85,23 @@ void main() {
     expect(_expanded(tester), isFalse);
   });
 
-  testWidgets('swipe up expands, swipe down collapses, then closes the sheet', (tester) async {
+  testWidgets('swipe up expands, moderate swipe down collapses, strong fling closes directly',
+      (tester) async {
     await _open(tester);
     await tester.fling(_handle, const Offset(0, -200), 1000);
     await tester.pumpAndSettle();
     expect(_expanded(tester), isTrue);
 
-    await tester.fling(_handle, const Offset(0, 200), 1000);
+    // Moderate downward swipe collapses first, then closes.
+    await tester.timedDrag(_handle, const Offset(0, 90), const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     expect(_expanded(tester), isFalse);
-    expect(find.byType(BottomSheet), findsOneWidget, reason: 'the first swipe down only collapses');
+    expect(find.byType(BottomSheet), findsOneWidget);
+
+    // Re-expand and verify a strong downward fling dismisses directly.
+    await tester.fling(_handle, const Offset(0, -200), 1000);
+    await tester.pumpAndSettle();
+    expect(_expanded(tester), isTrue);
 
     await tester.fling(_handle, const Offset(0, 200), 1000);
     await tester.pumpAndSettle();

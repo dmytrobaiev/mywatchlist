@@ -174,15 +174,15 @@ void main() {
       )));
       await tester.pumpAndSettle();
 
-      expect(find.text('Hello world'), findsOneWidget);
+      expect(find.text('Hello world', findRichText: true), findsOneWidget);
       expect(find.byIcon(Icons.visibility), findsOneWidget);
-      expect(find.text('Hidden profile secret'), findsNothing);
+      expect(find.textContaining('Hidden profile secret', findRichText: true), findsNothing);
 
       await tester.tap(find.byIcon(Icons.visibility));
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.visibility_off), findsOneWidget);
-      expect(find.text('Hidden profile secret'), findsOneWidget);
+      expect(find.textContaining('Hidden profile secret', findRichText: true), findsOneWidget);
     });
 
     test('formatAboutHtml converts plain [spoiler] BBCode into <div class="spoiler">', () {
@@ -249,6 +249,7 @@ void main() {
     test('parseInterestStackDetail parses plain-text "by MyAnimeList" in side list', () {
       const html = '''
 <html><body>
+<div class="stack-detail"><div class="detail-header"><h1 class="title">Root</h1></div></div>
 <div class="content-right">
   <div class="side-list"></div>
   <div class="side-list"></div>
