@@ -8,10 +8,15 @@ enum EditSwipe { none, expand, collapse, dismiss }
 const double editSwipeDistance = 40;
 const double editSwipeSpeed = 500;
 
-/// Decides what a finished vertical drag does: up expands
-/// "More options"; down collapses them, or closes the sheet when they are
-/// already collapsed. [dy] is the total move, [velocity] the release speed;
-/// both are negative upwards.
+/// Stronger downward pull/flick thresholds that dismiss the sheet directly
+/// even while expanded ("More options" open).
+const double editSwipeDismissDistance = 180;
+const double editSwipeDismissSpeed = 700;
+
+/// Decides what a finished vertical drag does: up expands "More options";
+/// down collapses them (or closes directly on a strong downward pull/flick),
+/// and closes the sheet when they are already collapsed. [dy] is the total
+/// move, [velocity] the release speed; both are negative upwards.
 EditSwipe editSwipeFor({
   required double dy,
   required double velocity,
@@ -20,7 +25,13 @@ EditSwipe editSwipeFor({
   final up = dy <= -editSwipeDistance || velocity <= -editSwipeSpeed;
   final down = dy >= editSwipeDistance || velocity >= editSwipeSpeed;
   if (up && !down) return expanded ? EditSwipe.none : EditSwipe.expand;
-  if (down && !up) return expanded ? EditSwipe.collapse : EditSwipe.dismiss;
+  if (down && !up) {
+    if (!expanded) return EditSwipe.dismiss;
+    if (dy >= editSwipeDismissDistance || velocity >= editSwipeDismissSpeed) {
+      return EditSwipe.dismiss;
+    }
+    return EditSwipe.collapse;
+  }
   return EditSwipe.none;
 }
 
@@ -85,8 +96,15 @@ class _EditSwipeAreaState extends State<EditSwipeArea> {
       }
     }
     final swipe = scrolled
-        // While scrolling, only a pull at the top counts (as a swipe down).
-        ? (_dy >= editSwipeDistance ? EditSwipe.collapse : EditSwipe.none)
+        // While scrolling, only a downward pull once at the top counts:
+        // dismisses directly when collapsed or on a strong downward flick/pull.
+        ? (_dy > 0
+            ? editSwipeFor(
+                dy: _dy,
+                velocity: velocity > 0 ? velocity : 0,
+                expanded: widget.expanded,
+              )
+            : EditSwipe.none)
         : editSwipeFor(dy: _dy, velocity: velocity, expanded: widget.expanded);
     _reset();
     if (swipe != EditSwipe.none) widget.onSwipe(swipe);

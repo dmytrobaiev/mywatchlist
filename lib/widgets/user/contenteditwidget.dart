@@ -10,6 +10,7 @@ import 'package:mywatchlist/services/api/MAL/web/mal_web_client.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
 import 'package:mywatchlist/user/private_notes/private_notes_store.dart';
 import 'package:mywatchlist/utils/app_routes.dart';
+import 'package:mywatchlist/widgets/common/smooth_collapse.dart';
 import 'package:mywatchlist/widgets/user/edit/edit_extras.dart';
 import 'package:mywatchlist/widgets/user/edit/edit_fields.dart';
 import 'package:mywatchlist/widgets/user/edit/edit_labels.dart';
@@ -100,6 +101,7 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   final TextEditingController _volumesController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
   final FocusNode _commentsFocus = FocusNode();
+  final GlobalKey _commentsFieldKey = GlobalKey();
   bool _commentsDirty = false;
 
   /// Last change of the MyAnimeList entry (`my_list_status.updated_at`, then
@@ -134,9 +136,28 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
   }
 
   void _onCommentsFocus() {
-    if (!_commentsFocus.hasFocus && _commentsDirty) {
+    if (_commentsFocus.hasFocus) {
+      _ensureCommentsVisible();
+    } else if (_commentsDirty) {
       _saveInlineComments();
     }
+  }
+
+  void _ensureCommentsVisible() {
+    void scroll() {
+      if (!mounted || !_commentsFocus.hasFocus) return;
+      final ctx = _commentsFieldKey.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.85,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => scroll());
+    Future<void>.delayed(const Duration(milliseconds: 280), scroll);
   }
 
   void _onExtras() {
@@ -556,13 +577,11 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
         ),
         const SizedBox(height: 8),
         _scoreBar(entry),
-        AnimatedSize(
+        SmoothCollapse(
+          expanded: _advanced,
           duration: const Duration(milliseconds: 240),
-          curve: editEaseOut,
-          alignment: Alignment.topCenter,
-          child: _advanced
-              ? _advancedEditor(entry)
-              : const SizedBox(width: double.infinity),
+          curve: Curves.easeInOutCubic,
+          child: _advancedEditor(entry),
         ),
         _bottomBar(),
       ],
@@ -584,15 +603,18 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
         key: const ValueKey('edit-handle'),
         behavior: HitTestBehavior.opaque,
         onTap: _toggleAdvanced,
-        // The only handle of the sheet; swipes are caught by [EditSwipeArea].
+        // Clean drag pill (no chevron); swipes are caught by [EditSwipeArea].
         child: SizedBox(
           height: 24,
           child: Center(
-            child: Container(
-              width: 36,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              width: _advanced ? 48 : 40,
               height: 4,
               decoration: BoxDecoration(
-                color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+                color: scheme.onSurfaceVariant
+                    .withValues(alpha: _advanced ? 0.5 : 0.38),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -930,21 +952,24 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
                     )
                   : null,
         ),
-        TextField(
-          key: const ValueKey('edit-comments'),
-          controller: _commentsController,
-          focusNode: _commentsFocus,
-          enabled: !savingComments,
-          minLines: 2,
-          maxLines: 6,
-          keyboardType: TextInputType.multiline,
-          onChanged: (_) {
-            final dirty = _commentsController.text != decodeMalText(_entry?.comments ?? '');
-            if (dirty != _commentsDirty) setState(() => _commentsDirty = dirty);
-          },
-          decoration: InputDecoration(
-            hintText: S.current.Edit_Comments_Empty,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        KeyedSubtree(
+          key: _commentsFieldKey,
+          child: TextField(
+            key: const ValueKey('edit-comments'),
+            controller: _commentsController,
+            focusNode: _commentsFocus,
+            enabled: !savingComments,
+            minLines: 2,
+            maxLines: 6,
+            keyboardType: TextInputType.multiline,
+            onChanged: (_) {
+              final dirty = _commentsController.text != decodeMalText(_entry?.comments ?? '');
+              if (dirty != _commentsDirty) setState(() => _commentsDirty = dirty);
+            },
+            decoration: InputDecoration(
+              hintText: S.current.Edit_Comments_Empty,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -981,30 +1006,19 @@ class _ContentEditWidgetState extends State<ContentEditWidget> {
     final scheme = Theme.of(context).colorScheme;
     final deleting = _busy.contains(EditField.delete);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      padding: const EdgeInsets.fromLTRB(12, 0, 8, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Tooltip(
-            message: S.current.Delete_from_List,
-            child: FilledButton.tonal(
-              key: const ValueKey('edit-delete'),
-              style: FilledButton.styleFrom(
-                backgroundColor: scheme.errorContainer,
-                foregroundColor: scheme.onErrorContainer,
-                minimumSize: const Size(44, 40),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                visualDensity: VisualDensity.compact,
-              ),
-              onPressed: deleting ? null : _delete,
-              child: deleting
-                  ? SmallSpinner(color: scheme.onErrorContainer)
-                  : Icon(
-                      Icons.delete_outline,
-                      size: 20,
-                      semanticLabel: S.current.Delete_from_List,
-                    ),
-            ),
+          IconButton(
+            key: const ValueKey('edit-delete'),
+            tooltip: S.current.Delete_from_List,
+            color: scheme.error,
+            visualDensity: VisualDensity.compact,
+            onPressed: deleting ? null : _delete,
+            icon: deleting
+                ? SmallSpinner(color: scheme.error)
+                : const Icon(Icons.delete_outline, size: 22),
           ),
         ],
       ),

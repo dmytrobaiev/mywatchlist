@@ -48,11 +48,13 @@ class _UserUpdatesPageState extends State<UserUpdatesPage> with AutomaticKeepAli
   late Future<AnimeUserUpdatesResponse> _updates = _fetch();
 
   Future<AnimeUserUpdatesResponse> _fetch() async {
-    final result = await JikanFallbacks.race<AnimeUserUpdatesResponse>(
-      jikan: () => JikanApi.getAnimeUserUpdates(widget.id, category: widget.category),
-      fallback: () => JikanFallbacks.userUpdates(widget.id, widget.category, 1),
-    );
-    return result.value;
+    // Prefer direct on-device MAL `/stats?m=all` for live second-level
+    // freshness (jikan-edge caches `/userupdates` at the edge for hours).
+    try {
+      return await JikanFallbacks.userUpdates(widget.id, widget.category, 1);
+    } catch (_) {
+      return JikanApi.getAnimeUserUpdates(widget.id, category: widget.category);
+    }
   }
 
   void _retry() {

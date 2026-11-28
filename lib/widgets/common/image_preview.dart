@@ -236,10 +236,15 @@ Future<String> _getPathToDownload() async {
 
 void zoomInImageList(BuildContext context, List<String> urlList,
     [int index = 0]) {
-  PageController pageController = PageController(initialPage: index);
-  final listener = StreamListener(index);
+  if (urlList.isEmpty) return;
+  final initialIndex = index.clamp(0, urlList.length - 1);
+  PageController pageController = PageController(initialPage: initialIndex);
+  final listener = StreamListener(initialIndex);
   pageController.addListener(() {
-    listener.update(pageController.page?.toInt() ?? 0);
+    final page = pageController.page?.round();
+    if (page != null) {
+      listener.update(page.clamp(0, urlList.length - 1));
+    }
   });
   showDialog(
       context: context,
@@ -266,9 +271,11 @@ void zoomInImageList(BuildContext context, List<String> urlList,
                     loadingBuilder: (context, event) => _imageLoader(event),
                   ),
                   StreamBuilder<int>(
+                      initialData: initialIndex,
                       stream: listener.stream,
                       builder: (context, snapshot) {
-                        var imageIndex = snapshot.data ?? 0;
+                        var imageIndex =
+                            (snapshot.data ?? initialIndex).clamp(0, urlList.length - 1);
                         return Column(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [

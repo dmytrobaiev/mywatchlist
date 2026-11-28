@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:mywatchlist/constants/constants.dart' show gotoPage;
 import 'package:mywatchlist/generated/l10n.dart';
-import 'package:mywatchlist/screens/MAL/interest_stack_detail_screen.dart';
 import 'package:mywatchlist/screens/user_profile/sections/profile_tab.dart';
 import 'package:mywatchlist/screens/user_profile/sections/profile_tabs_source.dart';
 import 'package:mywatchlist/services/api/Jikan/jikan_anime_review.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/anime_detailed_html.dart' show InterestStack;
 import 'package:mywatchlist/utils/app_routes.dart';
 import 'package:mywatchlist/utils/web_launcher.dart';
-import 'package:mywatchlist/widgets/MAL/content/intereststackwidget.dart' show InterestStackPictures;
+import 'package:mywatchlist/widgets/MAL/content/intereststackwidget.dart' show InterestStackCard;
 import 'package:mywatchlist/widgets/MAL/content/show_reviews.dart' show showReviewPager;
 import 'package:mywatchlist/widgets/MAL/review/review_item.dart' show ReviewScoreBadge;
 import 'package:mywatchlist/widgets/common/app_image.dart';
@@ -435,59 +433,9 @@ class _StackTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final faded = theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant);
-    final images = List<String>.from((stack.imageUrls ?? const <String>[]).reversed);
-    final updated = stack.updatedAt;
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      elevation: 0,
-      color: cs.surfaceContainerLow,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () => gotoPage(context: context, newPage: InterestStackDetailScreen(stack: stack)),
-        child: SizedBox(
-          height: 110,
-          child: Row(
-            children: [
-              SizedBox(width: 110, child: InterestStackPictures(images: images)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        stack.title?.trim() ?? '',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        [
-                          S.of(context).Social_Stack_Entries(stack.entries ?? 0),
-                          S.of(context).Social_Stack_Restacks(stack.reStacks ?? 0),
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: faded,
-                      ),
-                      if (updated != null && updated.isNotEmpty)
-                        Text(updated, maxLines: 1, overflow: TextOverflow.ellipsis, style: faded),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-            ],
-          ),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 11),
+      child: InterestStackCard(stack: stack, isHoriz: false),
     );
   }
 }

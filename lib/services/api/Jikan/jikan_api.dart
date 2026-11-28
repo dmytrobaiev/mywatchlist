@@ -439,19 +439,21 @@ class JikanApi {
     }
   }
 
-  /// Forum topics of a title. All topics race Jikan against MyAnimeList's
-  /// forum page ([JikanFallbacks.race]), so a slow or unreachable Jikan costs
-  /// a few seconds instead of its whole timeout.
+  /// Forum topics of a title. Prefers MyAnimeList's live forum HTML
+  /// ([JikanFallbacks.forum]) because `jikan-edge` drops `>= 1,000` reply
+  /// counts (`null`) and omits `lastComment.date`, falling back to `jikan-edge`
+  /// only if direct MAL HTML fails.
   Future<AnimeForumResponse> getAnimeForum(int animeId, AnimeForumFilter filter,
       {String category = "anime"}) async {
     if (filter != AnimeForumFilter.all) {
       return _getAnimeForum(animeId, filter, category: category);
     }
-    final result = await JikanFallbacks.race(
-      jikan: () async => (await _getAnimeForum(animeId, filter, category: category)).data,
-      fallback: () => JikanFallbacks.forum(animeId, category),
-    );
-    return AnimeForumResponse(data: result.value);
+    try {
+      final mal = await JikanFallbacks.forum(animeId, category);
+      return AnimeForumResponse(data: mal);
+    } catch (_) {
+      return _getAnimeForum(animeId, filter, category: category);
+    }
   }
 
   Future<AnimeForumResponse> _getAnimeForum(int animeId, AnimeForumFilter filter,

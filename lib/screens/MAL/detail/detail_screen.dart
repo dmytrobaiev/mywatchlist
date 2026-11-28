@@ -329,73 +329,79 @@ class _ContentDetailedScreenState extends State<ContentDetailedScreen>
     _pinnedExtent = MediaQuery.paddingOf(context).top +
         DetailHeader.toolbarHeight +
         DetailHeader.tabBarHeight;
-    return PopScope(
-      canPop: !_showContentEdit,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _showContentEdit) _toggleEdit();
-      },
-      child: Scaffold(
-        floatingActionButtonLocation:
-            _showContentEdit ? FloatingActionButtonLocation.endFloat : null,
-        floatingActionButton: buildDetailFab(
-          data: _data,
-          editOpen: _showContentEdit,
-          onPressed: _toggleEdit,
-        ),
-        floatingActionButtonAnimator: NoScalingAnimation(),
-        body: Stack(
-          children: [
-            CustomScrollView(
-              key: _listKey,
-              controller: _scroll,
-              slivers: [
-                _appBar(context),
-                _body(),
-                SliverWrapper(
-                  SizedBox(height: 112 + MediaQuery.paddingOf(context).bottom),
-                ),
-              ],
-            ),
-            if (_showContentEdit && _data.hasContent)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 70,
-                child: DetailEditPanel(
-                  data: _data,
-                  showCrossTracker: _crossTrackerEnabled && _hasOtherTrackers,
-                  live: _liveStatus,
-                  onUpdate: (success) {
-                    if (success) _loadMal();
-                  },
-                  onLiveStatus: (live) => setState(() => _liveStatus = live),
-                  onDelete: () {
-                    setState(() => _showContentEdit = false);
-                    _loadMal();
-                  },
-                  onClose: () => setState(() => _showContentEdit = false),
-                ),
-              ),
-          ],
-        ),
+    return Scaffold(
+      floatingActionButton: buildDetailFab(
+        data: _data,
+        editOpen: _showContentEdit,
+        onPressed: _toggleEdit,
+      ),
+      floatingActionButtonAnimator: NoScalingAnimation(),
+      body: CustomScrollView(
+        key: _listKey,
+        controller: _scroll,
+        slivers: [
+          _appBar(context),
+          _body(),
+          SliverWrapper(
+            SizedBox(height: 112 + MediaQuery.paddingOf(context).bottom),
+          ),
+        ],
       ),
     );
   }
 
-  void _toggleEdit() {
-    if (mounted) setState(() => _showContentEdit = !_showContentEdit);
+  Future<void> _toggleEdit() async {
+    if (!mounted || !_data.hasContent) return;
+    if (_showContentEdit) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    setState(() => _showContentEdit = true);
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: false,
+        builder: (sheetContext) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+            ),
+            child: SingleChildScrollView(
+              child: DetailEditPanel(
+                data: _data,
+                showCrossTracker: _crossTrackerEnabled && _hasOtherTrackers,
+                live: _liveStatus,
+                onUpdate: (success) {
+                  if (success) _loadMal();
+                },
+                onLiveStatus: (live) {
+                  if (mounted) setState(() => _liveStatus = live);
+                },
+                onDelete: () {
+                  Navigator.of(sheetContext).maybePop();
+                  if (mounted) _loadMal();
+                },
+                onClose: () => Navigator.of(sheetContext).maybePop(),
+              ),
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _showContentEdit = false);
+    }
   }
 
   SliverAppBar _appBar(BuildContext context) {
     final theme = Theme.of(context);
-    final countdown = contentPref(context, (c) => c.showCountdownOnDetail);
     return SliverAppBar(
       pinned: true,
-      expandedHeight: DetailHeader.extentFor(
-        _data,
-        topInset: MediaQuery.paddingOf(context).top,
-        countdown: countdown,
-      ),
+      expandedHeight: DetailHeader.extentFor(_data),
       toolbarHeight: DetailHeader.toolbarHeight,
       title: DetailCollapsedTitle(title: _title),
       flexibleSpace: FlexibleSpaceBar(

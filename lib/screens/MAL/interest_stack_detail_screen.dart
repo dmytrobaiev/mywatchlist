@@ -239,16 +239,22 @@ class _InterestStackDetailScreenState extends State<InterestStackDetailScreen> {
       for (final u in widget.stack.imageUrls ?? const <String>[])
         if (u.trim().isNotEmpty) u.trim(),
     ];
-    if (listed.isNotEmpty) return listed.reversed.toList();
+    if (listed.length >= 3) return listed.reversed.toList();
     final fromEntries = <String>[];
     for (final e in _entries) {
       final url = e['imageUrl'];
       if (url is String && url.trim().isNotEmpty) {
-        fromEntries.add(url.trim());
-        if (fromEntries.length >= 3) break;
+        final trimmed = url.trim();
+        if (!fromEntries.contains(trimmed)) {
+          fromEntries.add(trimmed);
+          if (fromEntries.length >= 3) break;
+        }
       }
     }
-    return fromEntries.reversed.toList();
+    if (fromEntries.length > listed.length) {
+      return fromEntries.reversed.toList();
+    }
+    return listed.reversed.toList();
   }
 
   Widget _headerWidget(BuildContext context, {required bool hasTabs}) {

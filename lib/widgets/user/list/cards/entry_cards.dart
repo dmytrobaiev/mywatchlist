@@ -130,7 +130,11 @@ class EntryListTile extends StatelessWidget {
     final theme = Theme.of(context);
     final coverW = spacious ? 112.0 : 84.0;
     final coverH = spacious ? 160.0 : 120.0;
-    final airing = style.showAiringInfo || spacious ? airingText(entry, now, locale) : null;
+    final airing = spacious ? airingText(entry, now, locale) : null;
+    final hasCompactCountdown = !spacious &&
+        entry.isAnime &&
+        entry.releaseState == ReleaseState.releasing &&
+        shortAiringCountdown(entry, now) != null;
     final mergeRewatch = style.showStatus &&
         !entry.repeating &&
         entry.status == ListEntryStatus.completed &&
@@ -141,6 +145,7 @@ class EntryListTile extends StatelessWidget {
       if (entry.timesRewatched > 0 && !mergeRewatch)
         RewatchPill(entry: entry, short: style.showStatus),
       MeanScore(entry: entry, showMembers: spacious),
+      if (hasCompactCountdown) CompactAiringBadge(entry: entry, now: now),
       EntryCardBadges(entry: entry),
     ];
     return Padding(

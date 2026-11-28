@@ -281,6 +281,6 @@
   "UserList_Sort_Published_From": "Publication date",
   "UserList_Sort_Published_To": "End of publication",
   "UserList_Sort_My_Start": "My start date",
-  "UserList_Save_Height_Per_Layout": "Save height per layout",
-  "UserList_Save_Height_Per_Layout_Desc": "Keep separate heights for Comfortable, Compact, and Cover only"
+  "UserList_Save_Height_Per_Layout": "Remember height per density",
+  "UserList_Save_Height_Per_Layout_Desc": "Save a separate card height for each grid density"
 }

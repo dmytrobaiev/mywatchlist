@@ -9,7 +9,7 @@ Map<String, dynamic>? jikanMap(Object? value) =>
 int? jikanInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
-  if (value is String) return int.tryParse(value);
+  if (value is String) return int.tryParse(value.replaceAll(',', '').trim());
   return null;
 }
 

@@ -2019,12 +2019,14 @@ class HtmlParsers {
 
           final title =
               _getText(e, '.detail .title');
-          final username = e
-                  .querySelector('.detail .by')
-                  ?.nextElementSibling
-                  ?.text
-                  .trim() ??
-              '';
+          final byEl = e.querySelector('.detail .by');
+          var username = byEl?.nextElementSibling?.text.trim() ?? '';
+          if (username.isEmpty && byEl != null) {
+            final parentText = byEl.parent?.text ?? '';
+            final m = RegExp(r'\bby\s+([^\n·]+)', caseSensitive: false)
+                .firstMatch(parentText);
+            if (m != null) username = m.group(1)!.trim();
+          }
 
           final img = e.querySelector('img');
           final imageUrl =

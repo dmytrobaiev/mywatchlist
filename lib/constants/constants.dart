@@ -8,6 +8,8 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:mywatchlist/enums.dart' as enums show myAnimeStatusMap;
 import 'package:mywatchlist/generated/l10n.dart';
+import 'package:mywatchlist/screens/search/general_search_screen.dart';
+import 'package:mywatchlist/screens/search/search_models.dart' show SearchCategory;
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/widgets/common/custombutton.dart';
 import 'package:mywatchlist/widgets/common/app_colors.dart';
@@ -667,26 +669,25 @@ Widget genresWidget(List<Genre> genres, String category, BuildContext context,
           ),
         ),
       );
-  return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < genres.length; i++) ...[
-          if (i > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Text(
-                '·',
-                style: TextStyle(
-                  color: scheme.onSurfaceVariant,
-                ),
+  return Wrap(
+    alignment: WrapAlignment.center,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    runSpacing: 2,
+    children: [
+      for (var i = 0; i < genres.length; i++) ...[
+        if (i > 0)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              '·',
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
               ),
             ),
-          genreTag(genres[i]),
-        ],
+          ),
+        genreTag(genres[i]),
       ],
-    ),
+    ],
   );
 }
 
@@ -700,16 +701,14 @@ String convertGenre(Genre g, [String category = "anime"]) {
 }
 
 void onGenrePress(Genre e, String category, BuildContext context) {
-  // Navigate to the genre page
-  // Navigator.push(
-  //   context,
-  //   MaterialPageRoute(
-  //     builder: (context) => GenrePage(
-  //       genre: e,
-  //       category: category,
-  //     ),
-  //   ),
-  // );
+  final manga = category == 'manga';
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    builder: (_) => GeneralSearchScreen.byGenre(
+      ids: [if (e.id > 0) e.id],
+      names: [if (e.name.trim().isNotEmpty) e.name],
+      category: manga ? SearchCategory.manga : SearchCategory.anime,
+    ),
+  ));
 }
 
 bool nullOrEmpty(dynamic list) {

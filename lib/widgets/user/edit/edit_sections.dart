@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mywatchlist/generated/l10n.dart';
+import 'package:mywatchlist/widgets/common/smooth_collapse.dart';
 import 'package:mywatchlist/widgets/loading/shimmercolor.dart';
 import 'package:mywatchlist/widgets/user/edit/edit_fields.dart';
 import 'package:mywatchlist/widgets/user/edit/edit_rules.dart';
@@ -51,16 +52,14 @@ class EditSection extends StatelessWidget {
             ),
           ),
         ),
-        AnimatedSize(
+        SmoothCollapse(
+          expanded: open,
           duration: const Duration(milliseconds: 240),
-          curve: editEaseOut,
-          alignment: Alignment.topCenter,
-          child: open
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  child: child,
-                )
-              : const SizedBox(width: double.infinity),
+          curve: Curves.easeInOutCubic,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: child,
+          ),
         ),
       ],
     );

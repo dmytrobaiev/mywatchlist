@@ -5,7 +5,6 @@ import 'package:mywatchlist/generated/l10n.dart';
 import 'package:mywatchlist/screens/MAL/character_screen.dart';
 import 'package:mywatchlist/screens/MAL/contentdetailedscreen.dart';
 import 'package:mywatchlist/screens/MAL/featured_screen.dart';
-import 'package:mywatchlist/screens/MAL/interest_stack_detail_screen.dart';
 import 'package:mywatchlist/screens/forum/club_screen.dart';
 import 'package:mywatchlist/screens/forum/forum_posts_screen.dart';
 import 'package:mywatchlist/screens/search/search_filters.dart';
@@ -16,12 +15,12 @@ import 'package:mywatchlist/services/api/MAL/models/forum/forum_models.dart';
 import 'package:mywatchlist/services/api/MAL/models/mal_user_search.dart';
 import 'package:mywatchlist/services/api/MAL/scrapper/anime_news_featured.dart';
 import 'package:mywatchlist/utils/app_routes.dart';
+import 'package:mywatchlist/widgets/MAL/content/intereststackwidget.dart' show InterestStackCard;
 import 'package:mywatchlist/widgets/MAL/home/animegridcard.dart'
     show userCountFormat, ratingFormat, showContentEditSheet;
 import 'package:mywatchlist/widgets/common/app_colors.dart';
 import 'package:mywatchlist/widgets/common/app_image.dart';
 import 'package:mywatchlist/widgets/common/dub_icon.dart';
-import 'package:mywatchlist/widgets/common/image_preview.dart';
 
 /// Opens the detail screen of an anime or manga result.
 void openMedia(BuildContext context, Anime item, String category) {
@@ -636,49 +635,63 @@ class ArticleTile extends StatelessWidget {
                     if (item.text.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Expanded(
-                        child: Text(
-                          item.text,
-                          overflow: TextOverflow.fade,
-                          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final style = theme.textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant);
+                            final lineHeight = (style?.fontSize ?? 12.0) *
+                                (style?.height ?? 1.35) *
+                                MediaQuery.textScalerOf(context).scale(1.0);
+                            final maxLines =
+                                (constraints.maxHeight / lineHeight)
+                                    .floor()
+                                    .clamp(1, 20);
+                            return Text(
+                              item.text,
+                              maxLines: maxLines,
+                              overflow: TextOverflow.ellipsis,
+                              style: style,
+                            );
+                          },
                         ),
                       ),
                     ] else
                       const Spacer(),
                     if (tags.isNotEmpty)
-                      SizedBox(
-                        height: 24,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: tags.length > 4 ? 4 : tags.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 6),
-                          itemBuilder: (_, index) {
-                            final tag = tags[index];
-                            final chip = Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: scheme.secondaryContainer.withValues(alpha: 0.7),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                tag,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: scheme.onSecondaryContainer,
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (var i = 0; i < (tags.length > 4 ? 4 : tags.length); i++) ...[
+                              if (i > 0)
+                                Text(
+                                  '  ·  ',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: scheme.primary.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(4),
+                                  onTap: onTagTap == null
+                                      ? null
+                                      : () => onTagTap!(tags[i]),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 2),
+                                    child: Text(
+                                      tags[i],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: scheme.primary,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            );
-                            if (onTagTap == null) return chip;
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(999),
-                                onTap: () => onTagTap!(tag),
-                                child: chip,
-                              ),
-                            );
-                          },
+                            ],
+                          ],
                         ),
                       ),
                   ],
@@ -692,7 +705,7 @@ class ArticleTile extends StatelessWidget {
   }
 }
 
-/// An interest stack (a map of the scraped fields); the stacked covers open the image viewer.
+/// An interest stack (a map of the scraped fields), matching Explore's card layout.
 class StackTile extends StatelessWidget {
   final Map<String, dynamic> stack;
 
@@ -700,50 +713,12 @@ class StackTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final title = stack['title'] as String? ?? '';
-    final username = stack['username'] as String?;
-    final description = stack['description'] as String?;
-    final entries = stack['entries'] as int?;
-    final reStacks = stack['reStacks'] as int?;
-    final imageUrls = (stack['imageUrls'] as List<dynamic>?)?.cast<String>() ?? const <String>[];
-    final counts = [
-      if (entries != null) S.current.Srch_Entries_Count(entries),
-      if (reStacks != null) S.current.Srch_Restacks_Count(reStacks),
-    ].join('  ·  ');
-
-    return EntityTile(
-      leading: GestureDetector(
-        onTap: imageUrls.isEmpty ? null : () => zoomInImageList(context, imageUrls),
-        child: SizedBox(
-          width: 80,
-          height: 100,
-          child: imageUrls.isEmpty
-              ? const SearchThumb(url: null, width: 50, height: 70, radius: 4, icon: Icons.layers_rounded)
-              : Stack(
-                  children: [
-                    for (var i = (imageUrls.length > 3 ? 2 : imageUrls.length - 1); i >= 0; i--)
-                      Positioned(
-                        left: i * 12.0,
-                        top: i * 6.0,
-                        child: SearchThumb(url: imageUrls[i], width: 50, height: 70, radius: 4),
-                      ),
-                  ],
-                ),
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      child: InterestStackCard(
+        stack: InterestStack.fromJson(stack),
+        isHoriz: false,
       ),
-      leadingHeight: 100,
-      title: title,
-      subtitle: [
-        if (username != null) S.current.Srch_By(username),
-        if (description != null && description.isNotEmpty) description,
-      ].join('\n'),
-      meta: counts,
-      onTap: () => gotoPage(
-        context: context,
-        newPage: InterestStackDetailScreen(stack: InterestStack.fromJson(stack)),
-      ),
-      trailing: Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurfaceVariant),
     );
   }
 }

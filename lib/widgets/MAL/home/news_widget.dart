@@ -127,16 +127,27 @@ class _NewsTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Expanded(
-                  child: Text(
-                    node['text'] ?? '',
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface),
-                    overflow: TextOverflow.fade,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final style = theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface);
+                      final lineHeight = (style?.fontSize ?? 12.0) *
+                          (style?.height ?? 1.35) *
+                          MediaQuery.textScalerOf(context).scale(1.0);
+                      final maxLines = (constraints.maxHeight / lineHeight).floor().clamp(1, 20);
+                      return Text(
+                        node['text'] ?? '',
+                        style: style,
+                        maxLines: maxLines,
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   node['tags'] ?? '',
                   style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

@@ -9,16 +9,25 @@ class AnimePictures extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final urls = <String>[];
+    final indexMap = <int, int>{};
+    for (var i = 0; i < pictures.length; i++) {
+      final url = pictures[i].large;
+      if (url != null && url.isNotEmpty) {
+        indexMap[i] = urls.length;
+        urls.add(url);
+      }
+    }
+
     Widget avatarWidget(int index) {
+      final urlIndex = indexMap[index];
       return AvatarWidget(
         width: 200,
-        height: 100,
-        onTap: () {
-          zoomInImageList(
-            context,
-            pictures.map((e) => e.large).whereType<String>().toList(),
-          );
-        },
+        height: 304,
+        fit: BoxFit.contain,
+        onTap: urlIndex == null
+            ? null
+            : () => zoomInImageList(context, urls, urlIndex),
         url: pictures[index].large,
         useUserImageOnError: false,
         radius: BorderRadius.circular(6),

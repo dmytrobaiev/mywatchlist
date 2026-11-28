@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mywatchlist/constants/constants.dart';
 import 'package:mywatchlist/generated/l10n.dart';
+import 'package:mywatchlist/screens/MAL/detail/detail_data.dart' show contentPref;
+import 'package:mywatchlist/screens/MAL/detail/header/next_episode.dart';
+import 'package:mywatchlist/screens/MAL/detail/sections/next_episode_card.dart';
 import 'package:mywatchlist/services/api/MAL/mal_anime.dart';
 import 'package:mywatchlist/user/preferences/preferences.dart';
 import 'package:mywatchlist/widgets/common/translator.dart';
@@ -21,6 +24,7 @@ class SysonpsisWidget extends StatefulWidget {
   final double horizPadding;
   final int characterLimit;
   final bool expanded;
+  final NextEpisode? nextEpisode;
 
   const SysonpsisWidget({
     super.key,
@@ -31,6 +35,7 @@ class SysonpsisWidget extends StatefulWidget {
     this.expanded = false,
     this.characterLimit = 300,
     this.horizPadding = 15.0,
+    this.nextEpisode,
   });
 
   @override
@@ -56,12 +61,24 @@ class _SysonpsisWidgetState extends State<SysonpsisWidget>
   Widget build(BuildContext context) {
     super.build(context);
     final scheme = Theme.of(context).colorScheme;
+    final showCountdown = widget.nextEpisode != null &&
+        contentPref(context, (c) => c.showCountdownOnDetail);
     final padded = Padding(
       padding: EdgeInsets.symmetric(horizontal: widget.horizPadding),
       child: widget.synopsis == null ? loadingText(context) : _content(context),
     );
     return Column(
       children: [
+        if (showCountdown)
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              widget.horizPadding + 5,
+              4,
+              widget.horizPadding + 5,
+              8,
+            ),
+            child: NextEpisodeCard(episode: widget.nextEpisode!),
+          ),
         ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: AnimatedSize(

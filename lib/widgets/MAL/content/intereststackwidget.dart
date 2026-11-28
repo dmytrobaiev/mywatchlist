@@ -44,17 +44,24 @@ class InterestStackContentList extends StatelessWidget {
                 ? EdgeInsets.symmetric(horizontal: horizPadding + 15.0)
                 : const EdgeInsets.symmetric(vertical: 20, horizontal: 5)),
         itemCount: interestStacks.length,
-        itemBuilder: (context, index) => _StackCard(stack: interestStacks[index], isHoriz: isHoriz),
+        itemBuilder: (context, index) => InterestStackCard(stack: interestStacks[index], isHoriz: isHoriz),
       ),
     );
   }
 }
 
-class _StackCard extends StatelessWidget {
+/// Unified Interest Stack card (Explore style): decorative layered portrait
+/// cover stack, title, clickable author, entry/restack counts, and optional
+/// date and description in vertical layouts.
+class InterestStackCard extends StatelessWidget {
   final InterestStack stack;
   final bool isHoriz;
 
-  const _StackCard({required this.stack, required this.isHoriz});
+  const InterestStackCard({
+    super.key,
+    required this.stack,
+    this.isHoriz = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -195,11 +202,13 @@ class InterestStackPictures extends StatelessWidget {
         ),
       );
     }
-    // Reversed input from `_StackCard` puts the primary cover last; pick the
-    // front cover cleanly and up to 2 receding tinted cover layers behind it.
+    // Reversed input from `InterestStackCard` puts the primary cover last;
+    // pick the front cover and up to 2 receding back layers. When fewer than
+    // 3 distinct images exist, render neutral surface-tinted back cards
+    // instead of duplicating the front artwork.
     final ordered = clean.reversed.toList();
     final front = ordered.first;
-    final backCount = ordered.length >= 3 ? 2 : (ordered.length == 2 ? 1 : 2);
+    const backCount = 2;
     const stepY = 5.0;
     const stepX = 7.0;
     final frontTop = backCount * stepY;
@@ -214,24 +223,37 @@ class InterestStackPictures extends StatelessWidget {
               right: depth * stepX,
               top: (backCount - depth) * stepY,
               bottom: depth * stepY,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    AppImage(
-                      url: ordered.length > depth ? ordered[depth] : front,
-                      fit: BoxFit.cover,
-                      placeholderColor: scheme.surfaceContainerHighest,
-                    ),
-                    ColoredBox(
-                      color: Colors.black.withValues(
-                        alpha: depth == 1 ? 0.30 : 0.48,
+              child: ordered.length > depth
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          AppImage(
+                            url: ordered[depth],
+                            fit: BoxFit.cover,
+                            placeholderColor: scheme.surfaceContainerHighest,
+                          ),
+                          ColoredBox(
+                            color: Colors.black.withValues(
+                              alpha: depth == 1 ? 0.30 : 0.48,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: depth == 1
+                            ? scheme.surfaceContainerHighest
+                            : scheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: scheme.surface.withValues(alpha: 0.7),
+                          width: 1,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
             ),
           Positioned(
             left: 0,

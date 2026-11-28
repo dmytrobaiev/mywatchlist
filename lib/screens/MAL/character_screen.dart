@@ -21,6 +21,7 @@ import 'package:mywatchlist/widgets/common/app_bar_menu.dart';
 import 'package:mywatchlist/widgets/common/app_image.dart';
 import 'package:mywatchlist/widgets/common/image_preview.dart';
 import 'package:mywatchlist/widgets/common/share_builder.dart';
+import 'package:mywatchlist/widgets/common/smooth_collapse.dart';
 import 'package:mywatchlist/widgets/common/translator.dart';
 import 'package:mywatchlist/widgets/loading/shimmercolor.dart';
 
@@ -1220,8 +1221,6 @@ class _AboutContentState extends State<_AboutContent> {
     ];
     final allOpen = spoilerIndices.isNotEmpty &&
         spoilerIndices.every(_openSpoilers.contains);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1229,10 +1228,9 @@ class _AboutContentState extends State<_AboutContent> {
         if (spoilerIndices.length >= 2) ...[
           Align(
             alignment: AlignmentDirectional.centerStart,
-            child: _SpoilerTogglePill(
+            child: _SpoilerToggleButton(
+              expanded: allOpen,
               label: allOpen ? 'Hide all spoilers' : 'Show all spoilers',
-              scheme: scheme,
-              theme: theme,
               onTap: () => setState(() {
                 if (allOpen) {
                   _openSpoilers.clear();
@@ -1242,10 +1240,10 @@ class _AboutContentState extends State<_AboutContent> {
               }),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
         ],
         for (var i = 0; i < segments.length; i++) ...[
-          if (i > 0) const SizedBox(height: 10),
+          if (i > 0) const SizedBox(height: 8),
           if (segments[i].spoiler)
             _SpoilerBlock(
               text: segments[i].body,
@@ -1263,38 +1261,30 @@ class _AboutContentState extends State<_AboutContent> {
   }
 }
 
-class _SpoilerTogglePill extends StatelessWidget {
+class _SpoilerToggleButton extends StatelessWidget {
+  final bool expanded;
   final String label;
-  final ColorScheme scheme;
-  final ThemeData theme;
   final VoidCallback onTap;
 
-  const _SpoilerTogglePill({
+  const _SpoilerToggleButton({
+    required this.expanded,
     required this.label,
-    required this.scheme,
-    required this.theme,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: scheme.secondaryContainer,
-      borderRadius: BorderRadius.circular(999),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: scheme.onSecondaryContainer,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+    return TextButton.icon(
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
       ),
+      onPressed: onTap,
+      icon: Icon(
+        expanded ? Icons.visibility_off : Icons.visibility,
+        size: 16,
+      ),
+      label: Text(label),
     );
   }
 }
@@ -1314,27 +1304,25 @@ class _SpoilerBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final name = S.current.Fc_Spoiler;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SpoilerTogglePill(
-          label: expanded ? 'Hide spoiler' : 'Show spoiler',
-          scheme: scheme,
-          theme: theme,
+        _SpoilerToggleButton(
+          expanded: expanded,
+          label: expanded
+              ? S.current.Fc_Spoiler_Hide(name)
+              : S.current.Fc_Spoiler_Show(name),
           onTap: onToggle,
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 200),
+        SmoothCollapse(
+          expanded: expanded,
+          duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: expanded
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: _LinkifiedAboutText(text: text, style: style),
-                )
-              : const SizedBox.shrink(),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: _LinkifiedAboutText(text: text, style: style),
+          ),
         ),
       ],
     );

@@ -197,13 +197,23 @@ class _ShowAnimeFeaturedState extends State<ShowAnimeFeatured>
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-        child: Text(
-          article.text,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            height: 1.4,
-          ),
-          overflow: TextOverflow.fade,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final style = theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.4,
+            );
+            final lineHeight = (style?.fontSize ?? 12.0) *
+                (style?.height ?? 1.4) *
+                MediaQuery.textScalerOf(context).scale(1.0);
+            final maxLines = (constraints.maxHeight / lineHeight).floor().clamp(1, 20);
+            return Text(
+              article.text,
+              style: style,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+            );
+          },
         ),
       ),
     );
@@ -226,6 +236,7 @@ class _ShowAnimeFeaturedState extends State<ShowAnimeFeatured>
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w500,
                   ),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

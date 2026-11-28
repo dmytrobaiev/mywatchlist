@@ -247,10 +247,21 @@ class _NewsCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Expanded(
-                      child: Text(
-                        news.excerpt ?? '',
-                        overflow: TextOverflow.fade,
-                        style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final style = theme.textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4);
+                          final lineHeight = (style?.fontSize ?? 12.0) *
+                              (style?.height ?? 1.4) *
+                              MediaQuery.textScalerOf(context).scale(1.0);
+                          final maxLines = (constraints.maxHeight / lineHeight).floor().clamp(1, 20);
+                          return Text(
+                            news.excerpt ?? '',
+                            maxLines: maxLines,
+                            overflow: TextOverflow.ellipsis,
+                            style: style,
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -259,6 +270,7 @@ class _NewsCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             news.authorUsername ?? '',
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: scheme.primary,

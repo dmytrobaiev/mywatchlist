@@ -15,6 +15,7 @@ DetailSection? synopsisSection(DetailData data) {
       background: content.background,
       category: data.category,
       horizPadding: detailHorizPadding,
+      nextEpisode: data.nextEpisode,
     ),
   );
 }

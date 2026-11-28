@@ -65,41 +65,33 @@ class DetailEditPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = data.content;
     final saved = content?.myListStatus;
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.6,
-      ),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ContentEditWidget(
-              id: data.id,
-              contentDetailed: content,
-              category: data.category,
-              onUpdate: onUpdate,
-              onListStatusChange: (status) {
-                final value = LiveListStatus.from(status);
-                if (value != null) onLiveStatus(value);
-              },
-              onDelete: onDelete,
-              onDismiss: onClose,
-            ),
-            if (showCrossTracker)
-              CrossTrackerWidget(
-                malId: data.id,
-                title: content?.title ?? '',
-                category: data.category,
-                malStatus: live?.status ?? saved?.status,
-                malScore: live?.score ?? saved?.score,
-                // The MAL manga list status has no parsed chapter count yet.
-                malProgress: live?.progress ??
-                    (data.isAnime ? saved?.numEpisodesWatched : null),
-              ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ContentEditWidget(
+          id: data.id,
+          contentDetailed: content,
+          category: data.category,
+          onUpdate: onUpdate,
+          onListStatusChange: (status) {
+            final value = LiveListStatus.from(status);
+            if (value != null) onLiveStatus(value);
+          },
+          onDelete: onDelete,
+          onDismiss: onClose,
         ),
-      ),
+        if (showCrossTracker)
+          CrossTrackerWidget(
+            malId: data.id,
+            title: content?.title ?? '',
+            category: data.category,
+            malStatus: live?.status ?? saved?.status,
+            malScore: live?.score ?? saved?.score,
+            // The MAL manga list status has no parsed chapter count yet.
+            malProgress: live?.progress ??
+                (data.isAnime ? saved?.numEpisodesWatched : null),
+          ),
+      ],
     );
   }
 }

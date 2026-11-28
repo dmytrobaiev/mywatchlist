@@ -137,6 +137,6 @@
   "UserList_Sort_Published_From": "Date de publication",
   "UserList_Sort_Published_To": "Fin de publication",
   "UserList_Sort_My_Start": "Ma date de début",
-  "UserList_Save_Height_Per_Layout": "Enregistrer la hauteur par densité",
-  "UserList_Save_Height_Per_Layout_Desc": "Conserver une hauteur distincte pour Confortable, Compact et Couverture"
+  "UserList_Save_Height_Per_Layout": "Mémoriser la hauteur par densité",
+  "UserList_Save_Height_Per_Layout_Desc": "Enregistrer une hauteur de carte distincte pour chaque densité"
 }

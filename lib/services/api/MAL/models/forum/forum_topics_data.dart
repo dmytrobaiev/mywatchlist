@@ -47,7 +47,9 @@ class ForumTopicsData {
     // Handle number_of_posts: API uses 'number_of_posts', HTML parser uses 'replies'
     int? numberOfPosts = json['number_of_posts'] as int?;
     if (numberOfPosts == null && json['replies'] != null) {
-      numberOfPosts = int.tryParse(json['replies'].toString());
+      numberOfPosts = int.tryParse(
+        json['replies'].toString().replaceAll(',', '').trim(),
+      );
     }
 
     // Handle last_post_created_at: API uses ISO string, HTML parser uses 'last_post'

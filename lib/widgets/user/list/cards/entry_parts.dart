@@ -608,6 +608,58 @@ double? progressRatio(ListEntryView e) {
   return (e.progress / e.total).clamp(0.0, 1.0);
 }
 
+/// Short next-episode countdown for Comfortable list badges: "2d 4h", "3h 15m", "45m".
+String? shortAiringCountdown(ListEntryView e, DateTime now) {
+  final next = e.upcomingAiring(now);
+  if (next == null) return null;
+  final wait = next.difference(now.toUtc());
+  if (wait.isNegative) return null;
+  if (wait.inDays > 0) {
+    return S.current.UserList_Short_Days_Hours(wait.inDays, wait.inHours % 24);
+  }
+  if (wait.inHours > 0) {
+    return S.current.UserList_Short_Hours_Minutes(wait.inHours, wait.inMinutes % 60);
+  }
+  final mins = wait.inMinutes < 1 ? 1 : wait.inMinutes;
+  return '${mins}m';
+}
+
+/// Compact icon + timer badge shown in the Comfortable list badge row for
+/// currently airing anime (e.g. clock icon + "2d 4h").
+class CompactAiringBadge extends StatelessWidget {
+  final ListEntryView entry;
+  final DateTime now;
+
+  const CompactAiringBadge({super.key, required this.entry, required this.now});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!entry.isAnime || entry.releaseState != ReleaseState.releasing) {
+      return const SizedBox.shrink();
+    }
+    final text = shortAiringCountdown(entry, now);
+    if (text == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.schedule_rounded, size: 12, color: scheme.primary),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          maxLines: 1,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.primary,
+            fontWeight: FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Next episode of an airing anime: "Ep. 8 · Sat 23:30 · in 2 d 4 h".
 String? airingText(ListEntryView e, DateTime now, String locale) {
   final next = e.upcomingAiring(now);
