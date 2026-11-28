@@ -249,7 +249,7 @@ void main() {
     test('parseInterestStackDetail parses plain-text "by MyAnimeList" in side list', () {
       const html = '''
 <html><body>
-<div class="stack-detail"><div class="detail-header"><h1 class="title">Root</h1></div></div>
+<div class="stacks-detail"><h2 class="title">Root</h2></div>
 <div class="content-right">
   <div class="side-list"></div>
   <div class="side-list"></div>
